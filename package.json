@@ -19,9 +19,7 @@
     "valins:preview": "tsx scripts/preview-valins.ts"
   },
   "dependencies": {
-    "@resvg/resvg-js": "^2.6.2",
     "csv-parse": "^7.0.3",
-    "dejavu-fonts-ttf": "^2.37.3",
     "dotenv": "^17.2.3",
     "postgres": "^3.4.7",
     "read-excel-file": "^9.3.12"

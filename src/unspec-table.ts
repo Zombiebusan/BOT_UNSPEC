@@ -1,13 +1,6 @@
-import { createRequire } from 'node:module';
-import { Resvg } from '@resvg/resvg-js';
-import type { PhotoMessage } from './messages.js';
+import type { RichMessage } from './messages.js';
 import { InputError, percent, previousDate, validDate, type Snapshot } from './report.js';
 
-const require = createRequire(import.meta.url);
-const fontFiles = [
-  require.resolve('dejavu-fonts-ttf/ttf/DejaVuSans.ttf'),
-  require.resolve('dejavu-fonts-ttf/ttf/DejaVuSans-Bold.ttf'),
-];
 export const TABLE_BRANCHES = ['MAKASSAR', 'BONE', 'PARE-PARE', 'KENDARI'] as const;
 export interface UnspecTableRow {
   branch: string;
@@ -34,31 +27,33 @@ export function buildUnspecTableRows(snapshot: Snapshot, previous: Snapshot | nu
   return rows;
 }
 
-export function renderUnspecTableSvg(snapshot: Snapshot, previous: Snapshot | null): string {
+export function renderUnspecTableText(snapshot: Snapshot, previous: Snapshot | null): string {
   const rows = buildUnspecTableRows(snapshot, previous);
   const integer = new Intl.NumberFormat('id-ID');
-  const text = (value: string, x: number, y: number, bold = false, align = 'middle', size = bold ? 29 : 27) => `<text x="${x}" y="${y}" text-anchor="${align}" dominant-baseline="middle" font-size="${size}" font-weight="${bold ? 700 : 400}">${value}</text>`;
-  const line = (x1: number, y1: number, x2: number, y2: number) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
-  const grid = [line(212, 60, 1012, 60)];
-  for (let column = 1; column <= 6; column++) grid.push(line(12 + column * 200, column >= 2 && column <= 4 ? 60 : 12, 12 + column * 200, 348));
-  for (let index = 0; index < 5; index++) grid.push(line(12, 108 + index * 48, 1412, 108 + index * 48));
-  const labels = [text('BRANCH', 112, 60, true), text('SALDO', 612, 36, true), text('REAL', 1112, 60, true), text('ACH', 1312, 60, true),
-    ...['H', 'H-1', 'TARGET', 'GAP'].map((label, index) => text(label, 312 + index * 200, 84, true))];
-  rows.forEach((item, index) => {
-    const y = 132 + index * 48, total = index === rows.length - 1;
-    labels.push(text(item.branch, 22, y, total, 'start', 26));
-    [integer.format(item.h), item.previous === null ? '—' : integer.format(item.previous), integer.format(item.target), integer.format(item.gap), percent(item.real), percent(item.achieved)]
-      .forEach((value, column) => labels.push(text(value, 312 + column * 200, y, total)));
+  const headers = ['BRANCH', 'H', 'H-1', 'TARGET', 'GAP', 'REAL', 'ACH'];
+  const cells = rows.map(item => [item.branch, integer.format(item.h), item.previous === null ? '—' : integer.format(item.previous), integer.format(item.target), integer.format(item.gap), percent(item.real), percent(item.achieved)]);
+  const widths = headers.map((header, column) => Math.max(header.length, ...cells.map(row => row[column]!.length)));
+  const sizes = widths.map(width => width + 2);
+  const center = (value: string, size: number): string => ' '.repeat(Math.floor((size - value.length) / 2)) + value + ' '.repeat(Math.ceil((size - value.length) / 2));
+  const border = (left: string, middle: string, right: string) => left + sizes.map(size => '─'.repeat(size)).join(middle) + right;
+  const saldoWidth = sizes.slice(1, 5).reduce((sum, size) => sum + size, 0) + 3;
+  const groupedSizes = [sizes[0]!, saldoWidth, sizes[5]!, sizes[6]!];
+  const lines = [
+    '┌' + groupedSizes.map(size => '─'.repeat(size)).join('┬') + '┐',
+    '│' + ['BRANCH', 'SALDO', 'REAL', 'ACH'].map((label, index) => center(label, groupedSizes[index]!)).join('│') + '│',
+    '│' + ' '.repeat(sizes[0]!) + '├' + sizes.slice(1, 5).map(size => '─'.repeat(size)).join('┬') + '┤' + ' '.repeat(sizes[5]!) + '│' + ' '.repeat(sizes[6]!) + '│',
+    '│' + ['','H','H-1','TARGET','GAP','',''].map((label, index) => center(label, sizes[index]!)).join('│') + '│',
+    border('├', '┼', '┤'),
+  ];
+  cells.forEach((values, index) => {
+    lines.push('│' + values.map((value, column) => column === 0 ? ' ' + value.padEnd(widths[0]!) + ' ' : center(value, sizes[column]!)).join('│') + '│');
+    lines.push(index === cells.length - 1 ? border('└', '┴', '┘') : border('├', '┼', '┤'));
   });
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1424" height="360" viewBox="0 0 1424 360" font-family="DejaVu Sans" fill="#000"><title>Rekap UNSPEC Sulbagsel</title><rect width="1424" height="360" fill="#fff"/><g fill="none" stroke="#000" stroke-width="2" shape-rendering="crispEdges"><rect x="12" y="12" width="1400" height="336"/>${grid.join('')}</g>${labels.join('')}</svg>`;
+  return lines.join('\n');
 }
 
-export function renderUnspecTablePng(snapshot: Snapshot, previous: Snapshot | null): Buffer {
-  return new Resvg(renderUnspecTableSvg(snapshot, previous), { font: { fontFiles, loadSystemFonts: false, defaultFontFamily: 'DejaVu Sans' } }).render().asPng();
-}
-
-export function unspecTableMessage(snapshot: Snapshot, previous: Snapshot | null, date: string): PhotoMessage {
+export function unspecTableMessage(snapshot: Snapshot, previous: Snapshot | null, date: string): RichMessage {
   if (!validDate(date)) throw new InputError('Tanggal tabel UNSPEC tidak valid.');
-  return { type: 'photo', photo: 'attach://report_image', upload: { filename: `unspec-sulbagsel-${date}.png`, base64: renderUnspecTablePng(snapshot, previous).toString('base64') },
-    caption: `📊 REKAP UNSPEC SULBAGSEL\nTanggal data: ${date} (WITA)\nH-1: ${previousDate(date)}${previous ? '' : ' (belum tersedia)'}\nTarget maksimal: 0,10%` };
+  const table = renderUnspecTableText(snapshot, previous).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return { type: 'text', parse_mode: 'HTML', text: `📊 REKAP UNSPEC SULBAGSEL\nTanggal data: ${date} (WITA)\nH-1: ${previousDate(date)}${previous ? '' : ' (belum tersedia)'}\nTarget maksimal: 0,10%\n\n<pre>${table}</pre>` };
 }

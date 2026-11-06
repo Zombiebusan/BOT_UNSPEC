@@ -7,6 +7,7 @@ export interface RichMessage {
   text: string;
   reply_markup?: InlineKeyboardMarkup;
   reply_parameters?: ReplyParameters;
+  parse_mode?: 'HTML';
 }
 
 export interface ReplyParameters {

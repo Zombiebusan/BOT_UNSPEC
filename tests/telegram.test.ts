@@ -96,7 +96,7 @@ test('group migration errors retain the destination metadata for recovery', asyn
   });
 });
 
-test('generated table photo uses multipart PNG upload, preserving topic and reply context', async t => {
+test('legacy prepared photos remain deliverable with topic and reply context', async t => {
   const png = Buffer.from('89504e470d0a1a0a', 'hex');
   t.mock.method(globalThis, 'fetch', async (url: string, options: RequestInit) => {
     assert.match(url, /\/sendPhoto$/);
@@ -116,4 +116,20 @@ test('generated table photo uses multipart PNG upload, preserving topic and repl
     type: 'photo', photo: 'attach://report_image', caption: 'Tabel UNSPEC', reply_parameters: { message_id: 55 },
     upload: { filename: 'table.png', base64: png.toString('base64') }
   }, 42);
+});
+
+test('monospace text table uses sendMessage with HTML parse mode and no photo', async t => {
+  const calls: string[] = [];
+  t.mock.method(globalThis, 'fetch', async (url: string, options: RequestInit) => {
+    calls.push(url);
+    const body = JSON.parse(String(options.body));
+    assert.match(url, /\/sendMessage$/);
+    assert.equal(body.parse_mode, 'HTML');
+    assert.equal(body.text, '<pre>BRANCH │ SALDO</pre>');
+    assert.equal(body.message_thread_id, 42);
+    assert.equal('photo' in body, false);
+    return Response.json({ ok: true, result: {} });
+  });
+  await new Telegram('test-token').send('-100123', { type: 'text', text: '<pre>BRANCH │ SALDO</pre>', parse_mode: 'HTML' }, 42);
+  assert.equal(calls.length, 1);
 });

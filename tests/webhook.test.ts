@@ -268,9 +268,10 @@ test('UNSPEC live text/table print bypasses CSV and stale menu dates; retries re
     assert.equal(await run(602, 'table:unspec:live'), 200);
     assert.equal(latest.mock.callCount(), 2);
     assert.equal(prepare.mock.calls[1]!.arguments[6], 'table');
-    const image = jobs.get(602)!.messages[0];
-    assert.ok(image && typeof image !== 'string' && image.type === 'photo' && image.upload);
-    assert.equal(Buffer.from(image.upload.base64, 'base64').subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+    const table = jobs.get(602)!.messages[0];
+    assert.ok(table && typeof table !== 'string' && table.type === 'text');
+    assert.equal(table.parse_mode, 'HTML');
+    assert.ok(table.text.includes('<pre>') && table.text.includes('SALDO'));
     latest.mock.mockImplementation(async () => { throw new InputError('API sementara gagal.'); });
     assert.equal(await run(601), 200);
     assert.equal(prepare.mock.callCount(), 2);

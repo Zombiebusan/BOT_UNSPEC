@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MASTER } from '../src/master.js';
 import { snapshotFromWorkzoneCounts } from '../src/report.js';
-import { buildUnspecTableRows, renderUnspecTablePng, renderUnspecTableSvg, unspecTableMessage } from '../src/unspec-table.js';
+import { buildUnspecTableRows, renderUnspecTableText, unspecTableMessage } from '../src/unspec-table.js';
 import { branchMenu, liveUnspecMenu, parseMenuAction, selectedUnspecTableMenu } from '../src/menu.js';
 
 const snapshot = (values: Record<string, number>) => snapshotFromWorkzoneCounts(Object.fromEntries(Object.keys(MASTER).map(code => [code, values[code] || 0])), '2026-11-05');
@@ -26,21 +26,28 @@ test('zero balances are valid and missing H-1 stays unavailable', () => {
   const empty = snapshot({});
   const rows = buildUnspecTableRows(empty, null);
   assert.ok(rows.every(row => row.h === 0 && row.previous === null && row.real === 0 && row.achieved === 100));
-  assert.ok(renderUnspecTableSvg(empty, null).includes('—'));
+  assert.ok(renderUnspecTableText(empty, null).includes('—'));
 });
 
-test('renderer produces merged headers and a real PNG with bundled fonts', () => {
-  const svg = renderUnspecTableSvg(current, previous);
-  for (const label of ['BRANCH', 'SALDO', 'H-1', 'TARGET', 'GAP', 'REAL', 'ACH', 'SULBAGSEL', '100,00%']) assert.ok(svg.includes(label));
-  const png = renderUnspecTablePng(current, previous);
-  assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
-  assert.equal(png.readUInt32BE(16), 1424);
-  assert.equal(png.readUInt32BE(20), 360);
-  assert.ok(png.length > 15_000, 'rendered image must contain text, not just blank grid lines');
+test('renderer preserves merged headers, aligned table borders and Telegram monospace text', () => {
+  const table = renderUnspecTableText(current, previous);
+  for (const label of ['BRANCH', 'SALDO', 'H-1', 'TARGET', 'GAP', 'REAL', 'ACH', 'SULBAGSEL', '100,00%']) assert.ok(table.includes(label));
+  assert.equal(new Set(table.split('\n').map(line => line.length)).size, 1, 'all table lines must have equal width');
   const message = unspecTableMessage(current, previous, '2026-11-05');
-  assert.equal(message.upload!.filename, 'unspec-sulbagsel-2026-11-05.png');
-  assert.equal(Buffer.from(message.upload!.base64, 'base64').subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
-  assert.match(message.caption!, /H-1: 2026-11-04/);
+  assert.equal(message.type, 'text');
+  assert.equal(message.parse_mode, 'HTML');
+  assert.ok(message.text.includes('<pre>'+table+'</pre>'));
+  assert.ok(message.text.length < 4096);
+  assert.match(message.text, /H-1: 2026-11-04/);
+  assert.ok(!('upload' in message));
+});
+
+test('large balances expand columns without breaking alignment or Telegram length limit', () => {
+  const large = snapshot({ ANT: 100000 });
+  const table = renderUnspecTableText(large, large);
+  assert.equal(new Set(table.split('\n').map(line => line.length)).size, 1);
+  assert.ok(table.includes('100.000'));
+  assert.ok(unspecTableMessage(large, large, '2026-11-05').text.length < 4096);
 });
 
 test('table button is immediately below print-all for UNSPEC only, with live and archive callbacks', () => {

@@ -8,7 +8,7 @@
 - VALINS ODP, VALINS DC, parsing Excel, dan fitur balas laporan dengan foto tetap menggunakan alur sebelumnya.
 - Judul, isi, urutan Branch, rumus, pembulatan, daftar STO, serta legenda laporan UNSPEC tidak diubah.
 - Cetak Ulang pada menu live mengambil API terbaru. Tombol cetak dari CSV tetap mencetak snapshot CSV sesuai tanggalnya.
-- **CETAK TABEL** berada tepat di bawah CETAK SEMUA. Pilihan ini mengambil API sekali, kemudian mengirim gambar PNG dengan header bertingkat SALDO (H/H-1/TARGET/GAP), REAL, ACH, empat Branch, dan total Sulbagsel. Jalur tabel juga tersedia untuk arsip CSV. Laporan teks sebelumnya tetap ada.
+- **CETAK TABEL** berada tepat di bawah CETAK SEMUA. Pilihan ini mengambil API sekali, kemudian mengirim teks monospace dengan garis tabel, header bertingkat SALDO (H/H-1/TARGET/GAP), REAL, ACH, empat Branch, dan total Sulbagsel. Jalur tabel juga tersedia untuk arsip CSV. Laporan teks sebelumnya tetap ada.
 
 ## Konfigurasi dan deployment
 
@@ -67,4 +67,4 @@ npm run db:check
 
 Tes mencakup kesamaan penuh empat teks laporan CSV/API, nol tiket, H-1 kosong, mapping/total tidak lengkap, pergantian tahun dan basis LIS, status HTTP gagal, menu tanpa CSV, klik tombol lama, retry, isolasi chat/topic, serta regresi VALINS dan foto. `db:check` melakukan pemeriksaan SQL dalam transaksi yang seluruhnya di-rollback.
 
-Tes tabel memeriksa pembulatan agregat regional, GAP, nilai nol, H-1 kosong, urutan Branch, PNG nyata dengan font bawaan, upload multipart Telegram, serta penyimpanan gambar yang identik pada retry.
+Tes tabel memeriksa pembulatan agregat regional, GAP, nilai nol, H-1 kosong, urutan Branch, kesejajaran semua baris, panjang pesan Telegram, penggunaan HTML `<pre>` melalui sendMessage, serta penyimpanan teks yang identik pada retry.

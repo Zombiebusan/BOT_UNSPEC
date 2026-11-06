@@ -75,6 +75,7 @@ export class Telegram {
     }
     await this.call('sendMessage', {
       ...context, text: typeof message === 'string' ? message : message.text,
+      ...(typeof message === 'string' || !message.parse_mode ? {} : { parse_mode: message.parse_mode }),
       ...(typeof message === 'string' || !message.reply_markup ? {} : { reply_markup: message.reply_markup })
     });
   }

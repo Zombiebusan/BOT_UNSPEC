@@ -25,7 +25,7 @@ Setelah deploy versi menu tombol, jalankan **`npm run webhook:set`** agar Telegr
 
 ## Cetak tabel UNSPEC
 
-Menu UNSPEC memiliki tombol **📊 CETAK TABEL** tepat di bawah **CETAK SEMUA**. Tombol mengirim satu gambar PNG tabel, bukan empat pesan teks. Laporan teks lama tetap tersedia melalui pilihan Branch dan CETAK SEMUA.
+Menu UNSPEC memiliki tombol **📊 CETAK TABEL** tepat di bawah **CETAK SEMUA**. Tombol mengirim satu pesan teks tabel monospace Telegram, dengan garis dan header SALDO bertingkat. Laporan teks lama tetap tersedia melalui pilihan Branch dan CETAK SEMUA.
 
 - Header: **BRANCH**, **SALDO** (H, H-1, TARGET, GAP), **REAL**, **ACH**.
 - Urutan: **MAKASSAR, BONE, PARE PARE, KENDARI, SULBAGSEL**.
@@ -33,15 +33,15 @@ Menu UNSPEC memiliki tombol **📊 CETAK TABEL** tepat di bawah **CETAK SEMUA**.
 - Menu UNSPEC dari unggahan CSV juga memiliki tombol tabel yang memakai arsip pada tanggal upload tersebut.
 - H-1 yang tidak tersedia ditampilkan `—`. Target = floor(LIS / 1000); GAP = max(0, H − target); REAL = H / LIS × 100%; ACH = min(100%, 0,10% / REAL × 100%), dengan ACH saldo nol = 100%.
 - Target dan GAP baris Sulbagsel dihitung dari total regional, bukan penjumlahan pembulatan atau GAP tiap Branch.
-- PNG disiapkan dan disimpan dalam job pengiriman; retry tidak mengganti angka pada gambar yang sudah disiapkan.
+- Teks tabel disiapkan dan disimpan dalam job pengiriman; retry tidak mengganti angka pada laporan yang sudah disiapkan.
 
-Renderer memakai `@resvg/resvg-js` dan font DejaVu Sans yang disertakan dalam dependency, sehingga tidak membutuhkan browser atau font sistem di Vercel. Preview tanpa mengirim Telegram:
+Tabel dikirim melalui `sendMessage` dengan HTML `<pre>`, sehingga spasi, garis, dan kolom tetap sejajar. Tidak ada gambar atau font khusus yang diperlukan. Preview tanpa mengirim Telegram:
 
 ```powershell
-npm run unspec:table:preview -- "hari-ini.csv" "hari-kemarin.csv" "2026-11-05" "output.png"
+npm run unspec:table:preview -- "hari-ini.csv" "hari-kemarin.csv" "2026-11-05"
 ```
 
-Gunakan `-` untuk CSV H-1 jika belum tersedia. Tidak ada environment variable tambahan untuk fitur tabel; lakukan deploy ulang proyek bot agar dependency dan tombol baru aktif.
+Gunakan `-` untuk CSV H-1 jika belum tersedia. Tidak ada environment variable tambahan untuk fitur tabel; lakukan deploy ulang proyek bot agar format teks baru aktif.
 
 ## Laporan bergambar melalui Reply/Balas
 
