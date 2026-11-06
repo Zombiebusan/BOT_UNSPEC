@@ -66,6 +66,14 @@ test('renderer preserves merged headers, aligned table borders and Telegram mono
   const detailLine = lines.find(line => line.includes('SA TAMALANREA'))!;
   const separators = (line: string) => Array.from(line).flatMap((character, index) => character === '│' ? [index] : []);
   assert.deepEqual(separators(regionalLine), separators(detailLine), 'all regional columns must align with the SA columns');
+  for (const branch of ['MAKASSAR', 'BONE', 'PARE PARE', 'KENDARI']) {
+    const index = lines.findIndex(line => line.split('│')[1]?.trim() === branch);
+    assert.ok(index > 0);
+    assert.match(lines[index - 1]!, /^│ +├/, 'BRANCH cell must not have a horizontal divider above its bottom-aligned label');
+    assert.ok(lines[index + 1]!.startsWith('├'), 'each Branch group must end with a full horizontal divider');
+    assert.equal(lines[index]!.split('│')[2]!.trim(), '', 'subtotal Service Area cell stays separate and empty');
+    assert.deepEqual(separators(lines[index]!), separators(detailLine));
+  }
   assert.equal(new Set(table.split('\n').map(line => Array.from(line).length)).size, 1, 'all table lines must have equal visible character counts');
   const messages = unspecTableMessages(current, previous, '2026-11-05');
   assert.equal(messages.length, 1);

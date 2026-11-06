@@ -28,7 +28,7 @@ Setelah deploy versi menu tombol, jalankan **`npm run webhook:set`** agar Telegr
 Menu UNSPEC memiliki tombol **📊 SULBAGSEL REPORT** tepat di bawah **CETAK SEMUA**. Tombol mengirim satu pesan teks tabel monospace Telegram, dengan garis dan header SALDO bertingkat. Laporan teks lama tetap tersedia melalui pilihan Branch dan CETAK SEMUA.
 
 - Header: **BRANCH**, **SERVICE AREA**, **SALDO** (H, H-1, TARGET, GAP), **CLOSE HI**, **REAL**, **ACH**.
-- Rincian 21 Service Area mengikuti urutan **MAKASSAR, BONE, PARE PARE, KENDARI**. Masing-masing kelompok SA diikuti satu subtotal Branch pada baris tersendiri, dengan sel BRANCH + SERVICE AREA digabung secara teks. Baris terakhir adalah total **SULBAGSEL**. Seluruh 50 STO masuk tepat satu SA; subtotal tidak dihitung lagi dalam total regional.
+- Rincian 21 Service Area mengikuti urutan **MAKASSAR, BONE, PARE PARE, KENDARI**. Kolom BRANCH dibuat menyatu vertikal sepanjang kelompok SA sampai baris subtotal; nama Branch berada di bagian bawah. Kolom SERVICE AREA tetap terpisah dan kosong pada baris subtotal. Garis penuh memisahkan setiap kelompok Branch. Baris terakhir adalah total **SULBAGSEL**. Seluruh 50 STO masuk tepat satu SA; subtotal tidak dihitung lagi dalam total regional.
 - Jalur API mengambil satu snapshot terbaru beserta H-1. Menekan SULBAGSEL REPORT kembali mengambil API lagi.
 - Label SULBAGSEL pada baris total memakai huruf standar dengan font monospace yang sama seperti semua kolom. Huruf Unicode bergaya tebal tidak digunakan karena dapat memicu font fallback dan membuat garis tabel tidak sejajar pada klien Telegram.
 - Menu UNSPEC dari unggahan CSV juga memiliki tombol tabel yang memakai arsip pada tanggal upload tersebut.

@@ -73,7 +73,7 @@ function renderRows(rows: UnspecServiceAreaRow[], widths: number[], padding = 1)
   const sizes = widths.map(width => width + padding * 2);
   const space = ' '.repeat(padding);
   const center = (value: string, size: number): string => ' '.repeat(Math.floor((size - value.length) / 2)) + value + ' '.repeat(Math.ceil((size - value.length) / 2));
-  const border = (left: string, middle: string, right: string, firstJoin = middle) => left + sizes.map((size, index) => '─'.repeat(size) + (index === sizes.length - 1 ? right : index === 0 ? firstJoin : middle)).join('');
+  const border = (left: string, middle: string, right: string) => left + sizes.map(size => '─'.repeat(size)).join(middle) + right;
   const saldoWidth = sizes.slice(2, 6).reduce((sum, size) => sum + size, 0) + 3;
   const groupedSizes = [sizes[0]!, sizes[1]!, saldoWidth, sizes[6]!, sizes[7]!, sizes[8]!];
   const lines = [
@@ -87,13 +87,14 @@ function renderRows(rows: UnspecServiceAreaRow[], widths: number[], padding = 1)
     const row = rows[index]!;
     // Keep the regional label in the same monospace font as the rest of the table.
     // Mathematical bold Unicode glyphs trigger fallback fonts in Telegram clients.
-    const rendered = values.map((value, column) => column <= 1 ? space + value.padEnd(widths[column]!) + space : center(value, sizes[column]!));
-    if (row.level === 'branch') {
-      const mergedSize = sizes[0]! + sizes[1]! + 1;
-      lines.push('│' + space + row.branch.padEnd(mergedSize - padding * 2) + space + '│' + rendered.slice(2).join('│') + '│');
-    } else lines.push('│' + rendered.join('│') + '│');
-    if (index === cells.length - 1) lines.push(border('└', '┴', '┘', row.level === 'branch' ? '─' : '┴'));
-    else if (row.level === 'branch' || rows[index + 1]!.level !== 'sa') lines.push(border('├', '┼', '┤', row.level === 'branch' ? '┬' : rows[index + 1]!.level === 'branch' ? '┴' : '┼'));
+    const rendered = values.map((value, column) => column === 0 && row.level === 'branch' ? center(value, sizes[column]!) : column <= 1 ? space + value.padEnd(widths[column]!) + space : center(value, sizes[column]!));
+    lines.push('│' + rendered.join('│') + '│');
+    if (index === cells.length - 1) lines.push(border('└', '┴', '┘'));
+    else if (row.level === 'branch') lines.push(border('├', '┼', '┤'));
+    else if (rows[index + 1]!.level === 'branch') {
+      // Preserve a single vertical BRANCH cell across its SA rows and subtotal.
+      lines.push('│' + ' '.repeat(sizes[0]!) + '├' + sizes.slice(1).map(size => '─'.repeat(size)).join('┼') + '┤');
+    } else if (rows[index + 1]!.level === 'regional') lines.push(border('├', '┼', '┤'));
   });
   return lines.join('\n');
 }
