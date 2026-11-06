@@ -57,10 +57,10 @@ export function buildUnspecServiceAreaRows(snapshot: Snapshot, previous: Snapsho
   return rows;
 }
 
-const TABLE_HEADERS = ['BRANCH', 'SERVICE AREA', 'H', 'H-1', 'TARGET', 'GAP', 'CLOSE HI', 'REAL', 'ACH'];
+const TABLE_HEADERS = ['BRANCH/SA', 'H', 'H-1', 'TARGET', 'GAP', 'CLOSE HI', 'REAL', 'ACH'];
 function tableCells(rows: UnspecServiceAreaRow[]): string[][] {
   const integer = new Intl.NumberFormat('id-ID');
-  return rows.map(item => [item.level === 'sa' ? '' : item.branch, item.serviceArea,
+  return rows.map(item => [item.level === 'sa' ? item.serviceArea : item.branch,
     integer.format(item.h), item.previous === null ? '—' : integer.format(item.previous), integer.format(item.target), integer.format(item.gap),
     item.closeHi === null ? '—' : integer.format(item.closeHi), percent(item.real), percent(item.achieved)]);
 }
@@ -74,27 +74,23 @@ function renderRows(rows: UnspecServiceAreaRow[], widths: number[], padding = 1)
   const space = ' '.repeat(padding);
   const center = (value: string, size: number): string => ' '.repeat(Math.floor((size - value.length) / 2)) + value + ' '.repeat(Math.ceil((size - value.length) / 2));
   const border = (left: string, middle: string, right: string) => left + sizes.map(size => '─'.repeat(size)).join(middle) + right;
-  const saldoWidth = sizes.slice(2, 6).reduce((sum, size) => sum + size, 0) + 3;
-  const groupedSizes = [sizes[0]!, sizes[1]!, saldoWidth, sizes[6]!, sizes[7]!, sizes[8]!];
+  const saldoWidth = sizes.slice(1, 5).reduce((sum, size) => sum + size, 0) + 3;
+  const groupedSizes = [sizes[0]!, saldoWidth, sizes[5]!, sizes[6]!, sizes[7]!];
   const lines = [
     '┌' + groupedSizes.map(size => '─'.repeat(size)).join('┬') + '┐',
-    '│' + ['BRANCH', 'SERVICE AREA', 'SALDO', 'CLOSE HI', 'REAL', 'ACH'].map((label, index) => center(label, groupedSizes[index]!)).join('│') + '│',
-    '│' + ' '.repeat(sizes[0]!) + '│' + ' '.repeat(sizes[1]!) + '├' + sizes.slice(2, 6).map(size => '─'.repeat(size)).join('┬') + '┤' + sizes.slice(6).map(size => ' '.repeat(size)).join('│') + '│',
-    '│' + ['','','H','H-1','TARGET','GAP','','',''].map((label, index) => center(label, sizes[index]!)).join('│') + '│',
+    '│' + ['BRANCH/SA', 'SALDO', 'CLOSE HI', 'REAL', 'ACH'].map((label, index) => center(label, groupedSizes[index]!)).join('│') + '│',
+    '│' + ' '.repeat(sizes[0]!) + '├' + sizes.slice(1, 5).map(size => '─'.repeat(size)).join('┬') + '┤' + sizes.slice(5).map(size => ' '.repeat(size)).join('│') + '│',
+    '│' + ['','H','H-1','TARGET','GAP','','',''].map((label, index) => center(label, sizes[index]!)).join('│') + '│',
     border('├', '┼', '┤'),
   ];
   cells.forEach((values, index) => {
     const row = rows[index]!;
     // Keep the regional label in the same monospace font as the rest of the table.
     // Mathematical bold Unicode glyphs trigger fallback fonts in Telegram clients.
-    const rendered = values.map((value, column) => column === 0 && row.level === 'branch' ? center(value, sizes[column]!) : column <= 1 ? space + value.padEnd(widths[column]!) + space : center(value, sizes[column]!));
+    const rendered = values.map((value, column) => column === 0 ? space + value.padEnd(widths[column]!) + space : center(value, sizes[column]!));
     lines.push('│' + rendered.join('│') + '│');
     if (index === cells.length - 1) lines.push(border('└', '┴', '┘'));
-    else if (row.level === 'branch') lines.push(border('├', '┼', '┤'));
-    else if (rows[index + 1]!.level === 'branch') {
-      // Preserve a single vertical BRANCH cell across its SA rows and subtotal.
-      lines.push('│' + ' '.repeat(sizes[0]!) + '├' + sizes.slice(1).map(size => '─'.repeat(size)).join('┼') + '┤');
-    } else if (rows[index + 1]!.level === 'regional') lines.push(border('├', '┼', '┤'));
+    else if (row.level === 'branch' || rows[index + 1]!.level !== 'sa') lines.push(border('├', '┼', '┤'));
   });
   return lines.join('\n');
 }

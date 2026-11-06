@@ -58,7 +58,8 @@ test('all 50 STOs belong to exactly one Service Area in the supplied order', () 
 
 test('renderer preserves merged headers, aligned table borders and Telegram monospace text', () => {
   const table = renderUnspecTableText(current, previous);
-  for (const label of ['BRANCH', 'SERVICE AREA', 'SALDO', 'H-1', 'TARGET', 'GAP', 'CLOSE HI', 'REAL', 'ACH', 'SULBAGSEL', '100,00%']) assert.ok(table.normalize('NFKC').includes(label));
+  for (const label of ['BRANCH/SA', 'SALDO', 'H-1', 'TARGET', 'GAP', 'CLOSE HI', 'REAL', 'ACH', 'SULBAGSEL', '100,00%']) assert.ok(table.normalize('NFKC').includes(label));
+  assert.ok(!table.includes('SERVICE AREA'));
   assert.ok(table.includes('SULBAGSEL'));
   assert.ok(!/[\u{1D400}-\u{1D7FF}]/u.test(table), 'styled Unicode must not trigger a different font in the total row');
   const lines = table.split('\n');
@@ -69,9 +70,10 @@ test('renderer preserves merged headers, aligned table borders and Telegram mono
   for (const branch of ['MAKASSAR', 'BONE', 'PARE PARE', 'KENDARI']) {
     const index = lines.findIndex(line => line.split('│')[1]?.trim() === branch);
     assert.ok(index > 0);
-    assert.match(lines[index - 1]!, /^│ +├/, 'BRANCH cell must not have a horizontal divider above its bottom-aligned label');
+    assert.ok(lines[index - 1]!.startsWith('├'), 'each subtotal must be separated from its SA rows');
     assert.ok(lines[index + 1]!.startsWith('├'), 'each Branch group must end with a full horizontal divider');
-    assert.equal(lines[index]!.split('│')[2]!.trim(), '', 'subtotal Service Area cell stays separate and empty');
+    assert.equal(lines[index]!.split('│').length, 10, 'one BRANCH/SA label plus seven numeric columns');
+    assert.match(lines[index]!.split('│')[2]!.trim(), /^\d/, 'saldo H immediately follows the merged label column');
     assert.deepEqual(separators(lines[index]!), separators(detailLine));
   }
   assert.equal(new Set(table.split('\n').map(line => Array.from(line).length)).size, 1, 'all table lines must have equal visible character counts');
