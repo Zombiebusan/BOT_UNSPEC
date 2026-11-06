@@ -51,3 +51,12 @@ ALTER TABLE report_preferences ADD COLUMN IF NOT EXISTS upload_date DATE;
 ALTER TABLE telegram_jobs ADD COLUMN IF NOT EXISTS failed_at TIMESTAMPTZ;
 ALTER TABLE telegram_jobs ADD COLUMN IF NOT EXISTS last_error_code INTEGER;
 ALTER TABLE telegram_jobs ADD COLUMN IF NOT EXISTS failure_reason TEXT;
+
+-- Acuan awal UNSPEC global dari API; hari operasional 08.00–07.59 WITA.
+CREATE TABLE IF NOT EXISTS unspec_opening_balances (
+  report_date DATE PRIMARY KEY,
+  captured_at TIMESTAMPTZ NOT NULL,
+  baseline JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK ((captured_at AT TIME ZONE 'UTC')::date = report_date)
+);

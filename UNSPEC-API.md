@@ -10,15 +10,17 @@
 - Cetak Ulang pada menu live mengambil API terbaru. Tombol cetak dari CSV tetap mencetak snapshot CSV sesuai tanggalnya.
 - **SULBAGSEL REPORT** berada tepat di bawah CETAK SEMUA. Pilihan ini mengambil API sekali, kemudian mengirim satu pesan tabel teks per 21 Service Area dalam empat Branch: BRANCH/SA (satu kolom untuk nama SA dan subtotal Branch), SALDO (H/H-1/TARGET/GAP), CLOSE HI, REAL, ACH, dan baris total SULBAGSEL dengan font monospace yang seragam. Pemisah baris dan spasi dipadatkan agar seluruh data muat 4.096 karakter; tombol menu/cetak ulang berada pada pesan yang sama. Khusus CLOSE HI, rumusnya **saldo pagi 08.00 WITA − saldo terkini**, terpisah dari H-1 dan tanpa clamp nol. Jalur tabel juga tersedia untuk arsip CSV. Laporan teks sebelumnya tetap ada.
 
-## Baseline CLOSE HI pukul 08.00 WITA
+## Hari operasional dan baseline CLOSE HI pada bot
 
-- Dashboard memiliki tabel `unspec_morning_baselines` yang dibuat otomatis. Snapshot pagi pertama yang berhasil dalam rentang **08.00 sampai sebelum 08.05 WITA** disimpan secara immutable (`ON CONFLICT DO NOTHING`), beserta waktu pengambilan aktual. Sinkronisasi berikutnya tidak mengubah baseline.
-- `vercel.json` dashboard menjadwalkan `GET /api/cron/morning` pada **`0 0 * * *` UTC**, yaitu 08.00 WITA. Isi `CRON_SECRET` Production pada proyek dashboard, dari `.env.local`, agar Vercel mengirim bearer secret yang sesuai. Cron menjalankan persiapan data persisten yang sama dengan API bot dan mendukung sumber lambat.
-- Batas lima menit mencegah saldo jam siang dianggap sebagai saldo 08.00. Karena pengambilan sumber tidak instan, report menampilkan jam capture aktual, misalnya `Acuan 08.00: terekam 08.01.20 WITA`.
-- Vercel Hobby dapat menjalankan cron harian pada waktu yang tidak presisi dalam jam jadwalnya. Jika pemanggilan melewati 08.05, aplikasi tidak membuat baseline palsu dan CLOSE HI tetap `—`. Gunakan penjadwal dengan presisi menit (paket yang mendukungnya atau scheduler eksternal dengan bearer CRON_SECRET) bila acuan 08.00 wajib tersedia setiap hari.
-- Sebelum pukul 08.00, pada hari cron/API gagal, atau untuk tanggal lama yang tidak memiliki rekaman pagi, CLOSE HI `—`, bukan nol dan bukan H-1. Tidak ada backfill dari snapshot siang.
-- API menambahkan `morning: null` atau `{date, scheduledTime:"08:00", timeZone:"Asia/Makassar", capturedAt, countsByWorkzone, total}`. Baseline harus tanggal yang sama dan tidak boleh sesudah snapshot report. Format lama tanpa field `morning` tetap dapat dibaca, tetapi CLOSE HI tidak dihitung dari H-1.
-- Pada bot, baseline API disimpan bersama snapshot arsip tanpa mengubah format laporan teks Branch/VALINS. Untuk tabel API yang diarsipkan, metadata pagi tersebut tetap dipakai ketika tersedia.
+- **Hari operasional berjalan dari 08.00 WITA sampai sebelum 08.00 hari berikutnya.** Contoh: tanggal 7 pukul 02.00 masih report tanggal 6 dan memakai acuan awal tanggal 6. Pada tanggal 7 pukul 08.00, tanggal report dan acuannya beralih ke tanggal 7.
+- API dashboard tetap memakai tanggal kalender untuk kontrak datanya. Bot memvalidasi tanggal kalender tersebut lalu mengubah tanggal report mengikuti waktu `fetchedAt`. Basis LIS juga mengikuti hari operasional. Sebelum 08.00, `previous` kalender API yang sebenarnya masih hari operasional yang sama tidak dipakai sebagai H-1; bot mengutamakan arsip operasional dan metadata pembanding yang tersimpan.
+- `unspec_opening_balances` di **database bot** menyimpan agregat 21 SA, waktu aktual, dan asal acuan. Normalisasi ini tidak memerlukan endpoint baru atau deploy dashboard. Field `morning` dari versi dashboard yang menyediakannya tetap didukung secara opsional.
+- Sesuai keputusan pengguna, jika rekaman tepat 08.00 belum tersedia, dipakai **rekaman API lengkap pertama yang tersedia** pada hari operasional itu. Label `Acuan awal tersedia: ... WITA` mencantumkan jam aktual. Data siang tidak diklaim sebagai rekaman tepat 08.00.
+- Acuan dapat dipulihkan dari snapshot API yang tersimpan atau tabel report API lengkap di antrean. Parser memerlukan seluruh 21 SA dan total Sulbagsel yang cocok; tidak menebak saldo dari persentase yang dibulatkan. Sumber CSV tidak boleh membentuk acuan global.
+- Rekaman yang lebih baru tidak menimpa acuan. Bila backfill menemukan rekaman yang benar-benar lebih awal, nilai tersebut dapat menjadi acuan yang lebih tepat untuk report selanjutnya. Pesan yang sudah disiapkan tetap frozen pada retry.
+- Bot menjadwalkan **`GET /api/unspec-morning`** pada **`0 0 * * *` UTC = 08.00 WITA**. Isi `CRON_SECRET` minimal 32 karakter pada Production **proyek bot**. Jadwal mengambil API yang sudah ada, menyimpan acuan, dan tidak mengirim pesan Telegram. Endpoint ini berdurasi maksimal 300 detik serta dapat melanjutkan request API persisten.
+- Jadwal Vercel Hobby mungkin terlambat dalam jam yang dijadwalkan. Jam aktual tetap ditulis dan fallback rekaman pertama tetap berfungsi. Untuk ketepatan menit 08.00, gunakan penjadwal yang mendukung presisi tersebut.
+- Jalankan `npm run db:setup` jika memakai database bot lain. Pemulihan manual tanpa kirim laporan: `npm run unspec:opening:backfill -- YYYY-MM-DD`.
 
 ## Konfigurasi dan deployment
 
@@ -33,6 +35,7 @@ Pada proyek bot `KKP-BOT`:
 ```text
 UNSPEC_API_URL=https://underspec-sulbagsel.vercel.app/api/bot/unspec
 UNSPEC_API_TOKEN=<token yang sama>
+CRON_SECRET=<secret acak minimal 32 karakter untuk jadwal pada bot>
 ```
 
 Nilai lokal sudah diisi dalam `.env.local` dashboard dan `.env` bot. Kedua file dikecualikan dari Git. Nilai tersebut tidak otomatis menjadi environment variables Vercel.
@@ -61,7 +64,7 @@ Bot juga mengirim JSON `{"requestId":"tg-<namespace-bot>-<update-id>"}`. Dashboa
 
 - Pengambilan sumber memakai pagination lengkap, deduplikasi INCIDENT, filter WORKZONE Sulbagsel, dan filter proactive yang sama dengan dashboard.
 - Endpoint menyinkronkan data baru sebelum sukses. Snapshot lama tidak dikembalikan seolah-olah hasil live.
-- H dan H-1 berdasarkan kalender WITA, bukan REPORTED DATE tiket. Klik menu lama tidak mengubah tanggal data live menjadi tanggal pesan tombol.
+- Kontrak tanggal API berdasarkan kalender WITA, lalu bot memetakannya ke hari operasional 08.00–07.59. REPORTED DATE tiket tidak menjadi tanggal report. Klik menu lama tidak mengubah waktu posisi data live menjadi waktu pesan tombol.
 - Bot memvalidasi kelengkapan 50 STO, nilai saldo, total, scope, cohort, tanggal, dan kesegaran hasil API. LIS tetap memakai master bot sesuai tanggal masing-masing snapshot.
 - `202`: pekerjaan belum selesai, bot menunggu/melanjutkan otomatis. `401`: token tidak sesuai. `503/504`: pekerjaan gagal atau konfigurasi/database belum siap, disertai kode penyebab yang aman. Jalur sinkron lama tanpa requestId tetap dapat mengembalikan `409` saat sibuk. Tidak ada laporan parsial yang dicetak.
 

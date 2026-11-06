@@ -35,7 +35,9 @@ Menu UNSPEC memiliki tombol **📊 SULBAGSEL REPORT** tepat di bawah **CETAK SEM
 - H-1 yang tidak tersedia ditampilkan `—`. Target = floor(LIS / 1000); GAP = max(0, H − target); REAL = H / LIS × 100%; ACH = min(100%, 0,10% / REAL × 100%), dengan ACH saldo nol = 100%.
 - Target dan GAP baris Sulbagsel dihitung dari total regional, bukan penjumlahan pembulatan atau GAP tiap Branch.
 - Khusus SULBAGSEL REPORT, **CLOSE HI = saldo pagi pukul 08.00 WITA − saldo saat report diambil**. Ini terpisah dari kolom H-1. Misalnya pagi 18 dan sekarang 17 menghasilkan 1; jika sekarang 19, hasilnya −1. Nilai tidak dibatasi minimum nol dan bukan klaim jumlah INCIDENT yang benar-benar closed.
-- Acuan pagi berasal dari baseline khusus yang disimpan satu kali per tanggal pada dashboard. Waktu perekaman aktual ditampilkan pada report. Jika baseline pagi tidak tersedia, CLOSE HI `—` walaupun H-1 tersedia. Report masih dikirim satu pesan. Arsip API menyimpan metadata baseline; CSV yang tidak memiliki acuan pagi tidak diganti dengan saldo H-1.
+- Hari operasional UNSPEC **08.00–07.59 WITA keesokan hari**. Pergantian tanggal pukul 00.00 tidak mereset tanggal report atau acuan CLOSE HI. Saat 08.00, bot memakai hari operasional dan acuan yang baru.
+- Acuan disimpan di database **bot**, tabel `unspec_opening_balances`. Jika rekaman 08.00 belum ada, sesuai kebijakan yang dipilih, bot memakai rekaman API lengkap pertama yang tersedia pada hari operasional tersebut. Label menunjukkan jam aktual (`Acuan awal tersedia`), bukan mengklaim data siang sebagai data tepat 08.00. Acuan tidak diganti saldo yang lebih baru; rekaman yang lebih awal dapat memperbaiki backfill.
+- Riwayat API bot dan tabel lama lengkap dapat dipakai untuk memulihkan acuan hari ini. Data CSV tidak dijadikan acuan global agar unggahan pengguna tidak memengaruhi chat lain. H-1 tetap terpisah; sebelum 08.00 data API berlabel kalender hari ini tidak dianggap sebagai H-1 jika sebenarnya masih hari operasional yang sama.
 - Seluruh report dikirim dalam **satu pesan**, maksimal 4.096 karakter. Garis horizontal dipadatkan ke header dan subtotal Branch; seluruh baris SA dan total Sulbagsel tetap ada. Spasi dipadatkan lagi bila angkanya panjang. Tombol menu/cetak ulang ditempel pada pesan report yang sama, tanpa pesan konfirmasi terpisah.
 - Teks tabel disiapkan dan disimpan dalam job pengiriman; retry tidak mengganti angka pada laporan yang sudah disiapkan.
 
@@ -45,7 +47,7 @@ Tabel dikirim melalui `sendMessage` dengan HTML `<pre>`, sehingga spasi, garis, 
 npm run unspec:table:preview -- "hari-ini.csv" "hari-kemarin.csv" "2026-11-05"
 ```
 
-Gunakan `-` untuk CSV H-1 jika belum tersedia. Tidak ada environment variable tambahan untuk fitur tabel; lakukan deploy ulang proyek bot agar format teks baru aktif.
+Gunakan `-` untuk CSV H-1 jika belum tersedia. Format tabel memakai konfigurasi API yang sudah ada; jadwal acuan awal pada bot memerlukan `CRON_SECRET` seperti dijelaskan di bawah.
 
 ## Laporan bergambar melalui Reply/Balas
 
@@ -95,10 +97,17 @@ Buat file `.env` dengan menyalin isi `.env.example`, lalu isi nilainya:
 | `APP_URL` | Domain production Vercel, misalnya `https://kkp-bot.vercel.app` |
 | `UNSPEC_API_URL` | `https://underspec-sulbagsel.vercel.app/api/bot/unspec` |
 | `UNSPEC_API_TOKEN` | Token yang sama dengan `UNSPEC_BOT_API_TOKEN` pada proyek dashboard |
+| `CRON_SECRET` | Secret acak minimal 32 karakter untuk jadwal acuan pagi pada proyek bot |
 
 Tidak perlu mengisi ID pengguna atau ID chat. Setiap pengguna dapat mengirim CSV ke bot; semua anggota di grup yang sama menggunakan riwayat snapshot grup tersebut.
 
-Untuk acuan CLOSE HI pukul 08.00, deploy dashboard terbaru dengan `CRON_SECRET` dan cron `0 0 * * *` (UTC = 08.00 WITA), kemudian deploy bot. Rincian waktu dan baseline yang belum tersedia ada di [UNSPEC-API.md](UNSPEC-API.md).
+Untuk acuan pagi, proyek **bot** menjadwalkan `/api/unspec-morning` pada `0 0 * * *` UTC = 08.00 WITA. Isi `CRON_SECRET` di Production proyek bot lalu deploy bot. Penyesuaian jam operasional ini tidak memerlukan perubahan/deploy dashboard; endpoint API yang sudah berjalan tetap dipakai. Pada jadwal yang terlambat, jam perekaman aktual tetap ditulis. Rincian ada di [UNSPEC-API.md](UNSPEC-API.md).
+
+Pemulihan acuan dari rekaman API bot yang sudah tersimpan, tanpa mengirim pesan Telegram:
+
+```powershell
+npm run unspec:opening:backfill -- 2026-11-06
+```
 
 Contoh membuat webhook secret:
 

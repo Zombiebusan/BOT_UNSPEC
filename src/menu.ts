@@ -41,7 +41,7 @@ export function mainMenu(): RichMessage {
 export function liveUnspecMenu(): RichMessage {
   const button = (scope: ValinsScope, text = scope as string) => ({ text, callback_data: `live:unspec:${scope}` });
   return {
-    text: ['📊 UNSPEC — DATA API', '', 'Pilih branch atau CETAK SEMUA. Bot mengambil posisi terbaru hari ini WITA tanpa upload CSV.', '📈 H-1 menggunakan snapshot tanggal kemarin.', '', 'CSV tetap tersedia untuk arsip dan koreksi tanggal historis.'].join('\n'),
+    text: ['📊 UNSPEC — DATA API', '', 'Pilih branch, CETAK SEMUA, atau SULBAGSEL REPORT. Bot mengambil posisi terbaru tanpa upload CSV.', '🕗 Hari operasional berganti pukul 08.00 WITA; sebelum itu tetap hari operasional kemarin.', '📈 H-1 menggunakan snapshot hari operasional sebelumnya.', '', 'CSV tetap tersedia untuk arsip dan koreksi tanggal historis.'].join('\n'),
     reply_markup: { inline_keyboard: [
       [button('PARE-PARE'), button('BONE')], [button('KENDARI'), button('MAKASSAR')],
       [button('SEMUA', '🖨 CETAK SEMUA')],

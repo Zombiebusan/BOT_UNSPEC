@@ -16,6 +16,7 @@
     "webhook:set": "tsx scripts/set-webhook.ts",
     "report:preview": "tsx scripts/preview.ts",
     "unspec:table:preview": "tsx scripts/preview-unspec-table.ts",
+    "unspec:opening:backfill": "tsx scripts/backfill-unspec-opening.ts",
     "valins:preview": "tsx scripts/preview-valins.ts"
   },
   "dependencies": {

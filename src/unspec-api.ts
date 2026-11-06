@@ -1,9 +1,10 @@
 import type { Config } from './config.js';
 import { InputError, previousDate, snapshotFromWorkzoneCounts, validDate, witaDate, type Snapshot } from './report.js';
-import { isMorningBaselineTime, type ReportMorningBaseline } from './morning-baseline.js';
+import { isExactMorningTime, isMorningBaselineTime, unspecOperationalDate, type ReportMorningBaseline } from './morning-baseline.js';
 
 export interface LiveUnspecReport {
   date: string;
+  sourceDate?: string;
   fetchedAt: string;
   timestamp: number;
   snapshot: Snapshot;
@@ -33,20 +34,22 @@ export function parseLiveUnspec(value: unknown, now = Date.now(), expectedReques
     if (snapshot.totalRows !== part.total) throw new InputError('Jumlah tiket API tidak cocok dengan rincian STO.');
     return snapshot;
   };
-  const snapshot = build(value.current, value.date);
+  const reportDate = unspecOperationalDate(time / 1000);
+  const snapshot = build(value.current, reportDate);
   let previous: Snapshot | null = null;
   if (value.previous !== null) {
     if (!record(value.previous) || value.previous.date !== previousDate(value.date)) throw new InputError('Tanggal H-1 API harus tepat sehari sebelum tanggal laporan.');
-    previous = build(value.previous, value.previous.date as string);
+    const sourcePrevious = build(value.previous, value.previous.date as string);
+    if (value.previous.date === previousDate(reportDate)) previous = sourcePrevious;
   }
   let morning: ReportMorningBaseline | null = null;
   if (value.morning !== undefined && value.morning !== null) {
     const part = value.morning;
-    if (!record(part) || part.date !== value.date || part.scheduledTime !== '08:00' || part.timeZone !== 'Asia/Makassar'
-      || typeof part.capturedAt !== 'string' || !isMorningBaselineTime(part.capturedAt, value.date) || Date.parse(part.capturedAt) > time) throw new InputError('Acuan saldo 08.00 WITA dari API tidak valid.');
-    morning = { snapshot: build(part, value.date), capturedAt: part.capturedAt };
+    if (!record(part) || part.date !== reportDate || part.scheduledTime !== '08:00' || part.timeZone !== 'Asia/Makassar'
+      || typeof part.capturedAt !== 'string' || !isMorningBaselineTime(part.capturedAt, reportDate) || !isExactMorningTime(part.capturedAt) || Date.parse(part.capturedAt) > time) throw new InputError('Acuan saldo 08.00 WITA dari API tidak valid.');
+    morning = { snapshot: build(part, reportDate), capturedAt: part.capturedAt, source: 'api_08' };
   }
-  return { date: value.date, fetchedAt: value.fetchedAt, timestamp: Math.floor(time / 1000), snapshot, previous, morning };
+  return { date: reportDate, sourceDate: value.date, fetchedAt: value.fetchedAt, timestamp: Math.floor(time / 1000), snapshot, previous, morning };
 }
 
 export class UnspecApi {

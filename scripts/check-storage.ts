@@ -136,7 +136,7 @@ try {
     console.log('Uji menu lulus: upload sebelum cetak, tombol terikat tanggal, H-1 hari sebelumnya, isolasi pengguna/topic, dan retry.');
 
     const liveChat = `integration-check:${randomUUID()}`;
-    const live = { date: '2026-10-27', fetchedAt: new Date(stamp(27, 8) * 1000).toISOString(), timestamp: stamp(27, 8), snapshot: snapshot(3), previous: snapshot(8) };
+    const live = { date: '2026-10-27', fetchedAt: new Date(stamp(27, 9) * 1000).toISOString(), timestamp: stamp(27, 9), snapshot: snapshot(3), previous: snapshot(8) };
     await store.prepareLiveUnspec(base - 80, liveChat, 'api-user', 42, 'SEMUA', live);
     const liveJob = (await store.getJob(base - 80))!;
     assert.equal(liveJob.messages.length, 5);
@@ -153,7 +153,7 @@ try {
     await store.prepareLiveUnspec(base - 77, missingChat, 'api-user', 0, 'BONE', { ...live, previous: null });
     assert.match(String((await store.getJob(base - 77))!.messages[0]), /SALDO \(H-1\): Belum tersedia/);
     console.log('Uji cetak API lulus: tanpa CSV, H-1 dashboard, semua/selected branch, retry, dan source ordering.');
-    const morningLive = { ...live, timestamp: stamp(27, 9), fetchedAt: new Date(stamp(27, 9) * 1000).toISOString(), morning: { snapshot: snapshot(7), capturedAt: '2026-10-27T00:01:00Z' } };
+    const morningLive = { ...live, timestamp: stamp(27, 10), fetchedAt: new Date(stamp(27, 10) * 1000).toISOString(), morning: { snapshot: snapshot(7), capturedAt: '2026-10-27T00:01:00Z' } };
     await store.prepareLiveUnspec(base - 76, liveChat, 'api-user', 42, 'SEMUA', morningLive, 'table');
     const tableJob = (await store.getJob(base - 76))!;
     assert.equal(tableJob.messages.length, 1);
@@ -175,6 +175,22 @@ try {
     assert.match(archivedTable.text, /2026-10-28/);
     await assert.rejects(store.prepareMenu(base - 74, flowChat, context.userId, 0, { type: 'table', kind: 'unspec', date: '2026-10-27' }), InputError);
     console.log('Uji tabel teks lulus: tersimpan dalam job, retry identik, dan arsip terikat tanggal CSV.');
+    await store.prepareLiveUnspec(base - 72, liveChat, 'api-user', 42, 'SEMUA', {
+      date: '2026-10-27', sourceDate: '2026-10-28', timestamp: stamp(28, 2), fetchedAt: new Date(stamp(28, 2) * 1000).toISOString(), snapshot: snapshot(4), previous: null
+    }, 'table');
+    assert.deepEqual(await store.getPreference(liveChat, 'api-user', 42), { kind: 'unspec', scope: 'SEMUA', date: '2026-10-27' });
+    assert.match((await store.report(liveChat, '2026-10-27'))[3]!, /SALDO \(H-1\): 8\n/);
+    const overnight = (await store.getJob(base - 72))!.messages[0];
+    assert.ok(overnight && typeof overnight !== 'string' && overnight.type === 'text');
+    assert.equal(overnight.text.split('\n').find(line => line.split('│')[1]?.trim() === 'SA MAJENE')!.split('│')[6]!.trim(), '3');
+    await store.prepareLiveUnspec(base - 71, liveChat, 'api-user', 42, 'SEMUA', {
+      date: '2026-10-28', timestamp: stamp(28, 8), fetchedAt: new Date(stamp(28, 8) * 1000).toISOString(), snapshot: snapshot(6), previous: snapshot(3)
+    }, 'table');
+    assert.match((await store.report(liveChat, '2026-10-28'))[3]!, /SALDO \(H-1\): 4\n/);
+    const newDay = (await store.getJob(base - 71))!.messages[0];
+    assert.ok(newDay && typeof newDay !== 'string' && newDay.type === 'text');
+    assert.equal(newDay.text.split('\n').find(line => line.split('│')[1]?.trim() === 'SA MAJENE')!.split('│')[6]!.trim(), '0');
+    console.log('Hari operasional lulus: acuan berlanjut sesudah tengah malam dan reset pukul 08.00 WITA.');
 
     if (workbook) {
       const valinsChat = `integration-check:${randomUUID()}`;

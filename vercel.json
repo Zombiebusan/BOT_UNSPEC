@@ -4,6 +4,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "public",
   "functions": {
-    "api/telegram.ts": { "maxDuration": 60 }
-  }
+    "api/telegram.ts": { "maxDuration": 60 },
+    "api/unspec-morning.ts": { "maxDuration": 300 }
+  },
+  "crons": [{ "path": "/api/unspec-morning", "schedule": "0 0 * * *" }]
 }

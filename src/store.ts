@@ -6,9 +6,9 @@ import type { OutgoingMessage } from './messages.js';
 import { branchMenu, liveUnspecMenu, mainMenu, selectedLiveUnspecMenu, selectedUnspecTableMenu, selectedMenu, uploadPrompt, valinsKind, type MenuAction, type ReportPreference, type UploadMenuContext } from './menu.js';
 import type { LiveUnspecReport } from './unspec-api.js';
 import { unspecTableMessages } from './unspec-table.js';
-import type { ReportMorningBaseline } from './morning-baseline.js';
+import { baselineFromReportJob, baselineFromSnapshot, chooseOpeningBaseline, operationalWindow, type ReportMorningBaseline } from './morning-baseline.js';
 
-interface StoredUnspecSnapshot extends Snapshot { reportMorning?: ReportMorningBaseline }
+interface StoredUnspecSnapshot extends Snapshot { reportMorning?: ReportMorningBaseline; reportSource?: 'api'; reportPrevious?: { date: string; snapshot: Snapshot } }
 
 let client: ReturnType<typeof postgres> | undefined;
 export function database(url: string): ReturnType<typeof postgres> {
@@ -23,6 +23,52 @@ export interface Job {
 }
 export class Store {
   constructor(private readonly sql: ReturnType<typeof postgres>) {}
+
+  private async openingIn(tx: postgres.TransactionSql, date: string, notAfter: string, candidates: ReportMorningBaseline[]): Promise<ReportMorningBaseline | null> {
+    await tx`SELECT pg_advisory_xact_lock(hashtextextended(${'unspec-opening:' + date}, 0))`;
+    const existing = await tx<{ baseline: ReportMorningBaseline }[]>`SELECT baseline FROM unspec_opening_balances WHERE report_date = ${date}::date`;
+    if (existing[0]) candidates.push(existing[0].baseline);
+    else {
+      const window = operationalWindow(date);
+      const snapshots = await tx<{ snapshot: StoredUnspecSnapshot; source_time: string }[]>`SELECT s.snapshot, s.source_time::text FROM daily_snapshots s
+        LEFT JOIN telegram_jobs j ON j.update_id = s.source_order AND j.chat_id = s.chat_id
+        WHERE s.source_time >= extract(epoch FROM ${window.start}::timestamptz) AND s.source_time < extract(epoch FROM ${window.end}::timestamptz)
+          AND (s.snapshot->>'reportSource' = 'api' OR ((j.messages::text LIKE '%live:unspec:%' OR j.messages::text LIKE '%table:unspec:live%')
+            AND (j.messages::text LIKE '%SUMMARY PERFORMANSI UNSPEC%' OR j.messages::text LIKE '%<pre>%')))
+        ORDER BY s.source_time ASC LIMIT 100`;
+      for (const row of snapshots) {
+        try {
+          candidates.push(baselineFromSnapshot(row.snapshot, new Date(Number(row.source_time) * 1000).toISOString()));
+          if (row.snapshot.reportMorning) candidates.push(row.snapshot.reportMorning);
+        } catch { /* Ignore incomplete legacy records rather than invent STO counts. */ }
+      }
+      const jobs = await tx<{ messages: OutgoingMessage[]; created_at: Date }[]>`SELECT messages, created_at FROM telegram_jobs
+        WHERE created_at >= ${window.start}::timestamptz AND created_at < ${window.end}::timestamptz
+          AND messages::text LIKE '%<pre>%' AND messages::text LIKE '%SULBAGSEL REPORT%'
+        ORDER BY created_at ASC LIMIT 200`;
+      for (const job of jobs) {
+        const candidate = baselineFromReportJob(job.messages, new Date(job.created_at).toISOString(), date);
+        if (candidate) candidates.push(candidate);
+      }
+    }
+    const selected = chooseOpeningBaseline(date, candidates, notAfter);
+    if (selected) await tx`INSERT INTO unspec_opening_balances (report_date, captured_at, baseline)
+      VALUES (${date}::date, ${selected.capturedAt}::timestamptz, ${tx.json(selected as unknown as postgres.JSONValue)})
+      ON CONFLICT (report_date) DO UPDATE SET captured_at = EXCLUDED.captured_at, baseline = EXCLUDED.baseline, updated_at = now()
+      WHERE EXCLUDED.captured_at < unspec_opening_balances.captured_at`;
+    return selected;
+  }
+
+  async captureUnspecOpening(live: LiveUnspecReport, scheduled = false): Promise<ReportMorningBaseline | null> {
+    return this.sql.begin(async tx => this.openingIn(tx, live.date, live.fetchedAt, [
+      baselineFromSnapshot(live.snapshot, live.fetchedAt, scheduled ? 'scheduled08' : 'first_available'), ...(live.morning ? [live.morning] : [])
+    ])) as Promise<ReportMorningBaseline | null>;
+  }
+
+  async backfillUnspecOpening(date: string, notAfter = new Date().toISOString()): Promise<ReportMorningBaseline | null> {
+    if (!validDate(date)) throw new InputError('Tanggal acuan awal tidak valid.');
+    return this.sql.begin(async tx => this.openingIn(tx, date, notAfter, [])) as Promise<ReportMorningBaseline | null>;
+  }
 
   async getJob(updateId: number): Promise<Job | null> {
     const rows = await this.sql<Job[]>`SELECT update_id::text, chat_id, messages, delivered FROM telegram_jobs WHERE update_id = ${updateId}`;
@@ -105,9 +151,12 @@ export class Store {
       await tx`SELECT pg_advisory_xact_lock(hashtextextended(${chatId}, 0))`;
       if ((await tx`SELECT update_id FROM telegram_jobs WHERE update_id = ${updateId}`).length) return;
       const old = await tx<{ snapshot: Snapshot }[]>`SELECT snapshot FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${previousDate(live.date)}::date`;
-      const previous = live.previous ?? old[0]?.snapshot ?? null;
+      const saved = await tx<{ snapshot: StoredUnspecSnapshot }[]>`SELECT snapshot FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${live.date}::date`;
+      const persistedPrevious = saved[0]?.snapshot.reportPrevious;
+      const previous = old[0]?.snapshot ?? (persistedPrevious?.date === previousDate(live.date) ? persistedPrevious.snapshot : null) ?? live.previous ?? null;
+      const morning = await this.openingIn(tx, live.date, live.fetchedAt, [baselineFromSnapshot(live.snapshot, live.fetchedAt), ...(live.morning ? [live.morning] : [])]);
       const reports = renderReports(live.snapshot, previous, live.timestamp, live.date);
-      const stored: StoredUnspecSnapshot = live.morning ? { ...live.snapshot, reportMorning: live.morning } : live.snapshot;
+      const stored: StoredUnspecSnapshot = { ...live.snapshot, reportSource: 'api', ...(morning ? { reportMorning: morning } : {}), ...(previous ? { reportPrevious: { date: previousDate(live.date), snapshot: previous } } : {}) };
       const changed = await tx`INSERT INTO daily_snapshots (chat_id, report_date, source_time, source_order, snapshot, reports)
         VALUES (${chatId}, ${live.date}::date, ${live.timestamp}, ${updateId}, ${tx.json(stored as unknown as postgres.JSONValue)}, ${tx.json(reports)})
         ON CONFLICT (chat_id, report_date) DO UPDATE SET source_time = EXCLUDED.source_time, source_order = EXCLUDED.source_order,
@@ -122,7 +171,7 @@ export class Store {
         VALUES (${chatId}, ${userId}, ${threadId}, 'unspec', ${scope}, ${live.date}::date)
         ON CONFLICT (chat_id, user_id, thread_id) DO UPDATE SET report_type = EXCLUDED.report_type, scope = EXCLUDED.scope, upload_date = EXCLUDED.upload_date, updated_at = NOW()`;
       const messages = format === 'table'
-        ? unspecTableMessages(live.snapshot, previous, live.date, live.morning ?? null).map(message => ({ ...message, reply_markup: selectedUnspecTableMenu(live.date, true).reply_markup }))
+        ? unspecTableMessages(live.snapshot, previous, live.date, morning).map(message => ({ ...message, reply_markup: selectedUnspecTableMenu(live.date, true).reply_markup }))
         : [...selectUnspecReports(reports, scope), selectedLiveUnspecMenu(scope, live.date, live.fetchedAt, previous !== null)];
       await tx`INSERT INTO telegram_jobs (update_id, chat_id, messages) VALUES (${updateId}, ${chatId}, ${tx.json(messages as unknown as postgres.JSONValue)})`;
     });
@@ -209,11 +258,16 @@ export class Store {
           const old = action.kind === 'unspec' ? await tx`SELECT 1 FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${previousDate(date)}::date` : [];
           messages = [branchMenu(action.kind, date, Boolean(old.length))];
         } else if (action.type === 'table') {
-          const rows = await tx<{ snapshot: StoredUnspecSnapshot }[]>`SELECT snapshot FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${date}::date`;
+          const rows = await tx<{ snapshot: StoredUnspecSnapshot; source_time: string }[]>`SELECT snapshot, source_time::text FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${date}::date`;
           if (!rows[0]) throw new InputError('Data upload tidak ditemukan. Silakan upload ulang file Anda.');
           const old = await tx<{ snapshot: Snapshot }[]>`SELECT snapshot FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${previousDate(date)}::date`;
+          const storedPrevious = rows[0].snapshot.reportPrevious;
+          const previous = old[0]?.snapshot ?? (storedPrevious?.date === previousDate(date) ? storedPrevious.snapshot : null);
+          const opening = await tx<{ baseline: ReportMorningBaseline }[]>`SELECT baseline FROM unspec_opening_balances WHERE report_date = ${date}::date`;
+          const candidates = [...(rows[0].snapshot.reportMorning ? [rows[0].snapshot.reportMorning] : []), ...(rows[0].snapshot.reportSource === 'api' && opening[0] ? [opening[0].baseline] : [])];
+          const morning = chooseOpeningBaseline(date, candidates, new Date(Number(rows[0].source_time) * 1000).toISOString());
           await tx`UPDATE report_preferences SET scope = 'SEMUA', updated_at = NOW() WHERE chat_id = ${chatId} AND user_id = ${userId} AND thread_id = ${threadId}`;
-          messages = unspecTableMessages(rows[0].snapshot, old[0]?.snapshot ?? null, date, rows[0].snapshot.reportMorning ?? null).map(message => ({ ...message, reply_markup: selectedUnspecTableMenu(date, false).reply_markup }));
+          messages = unspecTableMessages(rows[0].snapshot, previous, date, morning).map(message => ({ ...message, reply_markup: selectedUnspecTableMenu(date, false).reply_markup }));
         } else {
           let reports: string[] = [];
           if (action.kind === 'unspec') {

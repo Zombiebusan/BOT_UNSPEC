@@ -38,6 +38,7 @@ TELEGRAM_WEBHOOK_SECRET
 DATABASE_URL
 UNSPEC_API_URL
 UNSPEC_API_TOKEN
+CRON_SECRET
 ```
 
 Tidak perlu mengisi `PGHOST`, `PGPASSWORD`, `POSTGRES_URL`, atau variable koneksi alternatif; aplikasi cukup menggunakan `DATABASE_URL`.

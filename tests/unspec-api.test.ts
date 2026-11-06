@@ -46,14 +46,16 @@ test('valid zero balances and missing H-1 are supported; incomplete/stale data i
   }
 });
 
-test('H-1 remains the exact previous WITA day across year and LIS cutoff', () => {
+test('live UNSPEC date rolls over at 08:00 WITA, including year and LIS cutoffs', () => {
   const newYear = Date.parse('2026-12-31T16:01:00Z');
   const live = parseLiveUnspec(payload(newYear), newYear);
-  assert.equal(live.date, '2027-01-01');
+  assert.equal(live.date, '2026-12-31');assert.equal(live.previous, null);
   const cutoff = Date.parse('2026-10-31T16:01:00Z');
   const changed = parseLiveUnspec(payload(cutoff), cutoff);
-  assert.equal(changed.snapshot.branches.MAKASSAR.lis, 155754);
-  assert.equal(changed.previous!.branches.MAKASSAR.lis, 152298);
+  assert.equal(changed.date, '2026-10-31');assert.equal(changed.snapshot.branches.MAKASSAR.lis, 152298);assert.equal(changed.previous, null);
+  const after = Date.parse('2026-11-01T00:01:00Z'), started = parseLiveUnspec(payload(after), after);
+  assert.equal(started.date, '2026-11-01');assert.equal(started.snapshot.branches.MAKASSAR.lis, 155754);
+  assert.equal(started.previous!.branches.MAKASSAR.lis, 152298);
 });
 
 test('live print menus require no upload and no historical date in callbacks', () => {
@@ -121,7 +123,7 @@ test('08:00 baseline is parsed separately and rejects late, future, or wrong-day
   const now = Date.parse('2026-11-05T06:00:00Z');
   const morning = { date: '2026-11-05', scheduledTime: '08:00', timeZone: 'Asia/Makassar', capturedAt: '2026-11-05T00:01:00Z', total: 3, countsByWorkzone: counts(3) };
   const parsed = parseLiveUnspec({ ...payload(now), morning }, now);
-  assert.equal(parsed.morning!.snapshot.totalRows, 3);
+  assert.equal(parsed.morning!.snapshot!.totalRows, 3);
   assert.equal(parsed.snapshot.totalRows, 2);assert.equal(parsed.previous!.totalRows, 3);
   assert.equal(parseLiveUnspec(payload(now), now).morning, null);
   for (const patch of [ { date: '2026-11-04' }, { capturedAt: '2026-11-05T03:00:00Z' }, { capturedAt: '2026-11-05T00:05:00Z' }, { timeZone: 'UTC' } ]) {

@@ -65,7 +65,7 @@ test('CLOSE HI uses morning 08:00, never falls back to H-1, and can work without
   const messages = unspecTableMessages(current, previous, '2026-11-05', { snapshot: morning, capturedAt: '2026-11-05T00:01:00Z' });
   assert.equal(messages.length, 1);assert.ok(messages[0]!.text.length <= 4096);
   assert.match(messages[0]!.text, /Acuan 08.00: terekam/);
-  assert.match(unspecTableMessages(current, previous, '2026-11-05')[0]!.text, /Acuan 08.00 WITA belum tersedia/);
+  assert.match(unspecTableMessages(current, previous, '2026-11-05')[0]!.text, /Acuan awal belum tersedia/);
   assert.throws(() => unspecTableMessages(current, previous, '2026-11-05', { snapshot: morning, capturedAt: '2026-11-04T00:01:00Z' }));
 });
 

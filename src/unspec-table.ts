@@ -2,7 +2,7 @@ import type { RichMessage } from './messages.js';
 import { InputError, percent, previousDate, validDate, type Snapshot } from './report.js';
 import { masterForStoredBranch } from './master.js';
 import { UNSPEC_SERVICE_AREAS } from './unspec-service-areas.js';
-import { isMorningBaselineTime, type ReportMorningBaseline } from './morning-baseline.js';
+import { areaBalances, isExactMorningTime, isMorningBaselineTime, morningBalances, type MorningBalances, type ReportMorningBaseline } from './morning-baseline.js';
 
 export const TABLE_BRANCHES = ['MAKASSAR', 'BONE', 'PARE-PARE', 'KENDARI'] as const;
 export interface UnspecTableRow {
@@ -32,13 +32,14 @@ export function buildUnspecTableRows(snapshot: Snapshot, previous: Snapshot | nu
 
 export interface UnspecServiceAreaRow extends UnspecTableRow { serviceArea: string; closeHi: number | null; level: 'sa' | 'branch' | 'regional' }
 
-export function buildUnspecServiceAreaRows(snapshot: Snapshot, previous: Snapshot | null, date = '2026-11-01', morning: Snapshot | null = null): UnspecServiceAreaRow[] {
+export function buildUnspecServiceAreaRows(snapshot: Snapshot, previous: Snapshot | null, date = '2026-11-01', morning: MorningBalances | null = null): UnspecServiceAreaRow[] {
+  const opening = morning ? areaBalances(morning) : null;
   const areas: UnspecServiceAreaRow[] = UNSPEC_SERVICE_AREAS.map(area => {
     const current = snapshot.branches[area.branch], old = previous?.branches[area.branch];
     const fallback = masterForStoredBranch(area.branch, current.lis, date);
     const h = area.stos.reduce((sum, code) => sum + (current.stos[code] ?? 0), 0);
     const previousSaldo = old ? area.stos.reduce((sum, code) => sum + (old.stos[code] ?? 0), 0) : null;
-    const morningSaldo = morning ? area.stos.reduce((sum, code) => sum + (morning.branches[area.branch].stos[code] ?? 0), 0) : null;
+    const morningSaldo = opening ? opening[area.label]! : null;
     const lis = area.stos.reduce((sum, code) => sum + (current.stoLis?.[code] ?? fallback[code]!.lis), 0);
     const target = Math.floor(lis / 1000), real = h / lis * 100;
     return { level: 'sa', branch: area.branch === 'PARE-PARE' ? 'PARE PARE' : area.branch, serviceArea: area.label, h, previous: previousSaldo,
@@ -50,13 +51,12 @@ export function buildUnspecServiceAreaRows(snapshot: Snapshot, previous: Snapsho
     const label = branch === 'PARE-PARE' ? 'PARE PARE' : branch;
     const grouped = areas.filter(row => row.branch === label);
     if (grouped.reduce((sum, row) => sum + row.h, 0) !== snapshot.branches[branch].saldo ||
-      (previous && grouped.reduce((sum, row) => sum + row.previous!, 0) !== previous.branches[branch].saldo)
-      || (morning && UNSPEC_SERVICE_AREAS.filter(area => area.branch === branch).flatMap(area => [...area.stos]).reduce((sum, code) => sum + (morning.branches[branch].stos[code] ?? 0), 0) !== morning.branches[branch].saldo)) throw new InputError('Rincian STO Service Area tidak cocok dengan total Branch.');
+      (previous && grouped.reduce((sum, row) => sum + row.previous!, 0) !== previous.branches[branch].saldo)) throw new InputError('Rincian STO Service Area tidak cocok dengan total Branch.');
     const subtotal = branchTotals[index]!;
-    rows.push(...grouped, { ...subtotal, level: 'branch', serviceArea: '', closeHi: morning === null ? null : morning.branches[branch].saldo - subtotal.h });
+    rows.push(...grouped, { ...subtotal, level: 'branch', serviceArea: '', closeHi: opening === null ? null : UNSPEC_SERVICE_AREAS.filter(area => area.branch === branch).reduce((sum, area) => sum + opening[area.label]!, 0) - subtotal.h });
   }
   const regional = branchTotals.at(-1)!;
-  rows.push({ ...regional, level: 'regional', serviceArea: '', closeHi: morning === null ? null : TABLE_BRANCHES.reduce((sum, branch) => sum + morning.branches[branch].saldo, 0) - regional.h });
+  rows.push({ ...regional, level: 'regional', serviceArea: '', closeHi: opening === null ? null : Object.values(opening).reduce((sum, value) => sum + value, 0) - regional.h });
   return rows;
 }
 
@@ -98,16 +98,17 @@ function renderRows(rows: UnspecServiceAreaRow[], widths: number[], padding = 1)
   return lines.join('\n');
 }
 
-export function renderUnspecTableText(snapshot: Snapshot, previous: Snapshot | null, date?: string, morning: Snapshot | null = null): string {
+export function renderUnspecTableText(snapshot: Snapshot, previous: Snapshot | null, date?: string, morning: MorningBalances | null = null): string {
   const rows = buildUnspecServiceAreaRows(snapshot, previous, date, morning);
   return renderRows(rows, tableWidths(rows));
 }
 
 export function unspecTableMessages(snapshot: Snapshot, previous: Snapshot | null, date: string, morning: ReportMorningBaseline | null = null): RichMessage[] {
   if (!validDate(date)) throw new InputError('Tanggal tabel UNSPEC tidak valid.');
-  if (morning && !isMorningBaselineTime(morning.capturedAt, date)) throw new InputError('Tanggal/jam acuan 08.00 WITA tidak sesuai report.');
-  const rows = buildUnspecServiceAreaRows(snapshot, previous, date, morning?.snapshot ?? null), widths = tableWidths(rows);
-  const morningLabel = morning ? 'Acuan 08.00: terekam '+new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Makassar', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(morning.capturedAt))+' WITA' : 'Acuan 08.00 WITA belum tersedia';
+  if (morning && !isMorningBaselineTime(morning.capturedAt, date)) throw new InputError('Tanggal/jam acuan awal tidak sesuai hari operasional report.');
+  const rows = buildUnspecServiceAreaRows(snapshot, previous, date, morning ? morningBalances(morning) : null), widths = tableWidths(rows);
+  const captureLabel = morning ? new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Makassar', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(morning.capturedAt)) : '';
+  const morningLabel = morning ? (isExactMorningTime(morning.capturedAt) ? 'Acuan 08.00: terekam ' : 'Acuan awal tersedia: ')+captureLabel+' WITA' : 'Acuan awal belum tersedia';
   const compose = (padding: number): RichMessage => {
     const table = renderRows(rows, widths, padding).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     return { type: 'text', parse_mode: 'HTML', text: `📊 SULBAGSEL REPORT\nTanggal data: ${date} (WITA)\nH-1: ${previousDate(date)}${previous ? '' : ' (belum tersedia)'}\n${morningLabel}\nTarget maksimal: 0,10%\n\n<pre>${table}</pre>` };
