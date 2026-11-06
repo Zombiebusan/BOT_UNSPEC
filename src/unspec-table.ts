@@ -85,12 +85,9 @@ function renderRows(rows: UnspecServiceAreaRow[], widths: number[], padding = 1)
   ];
   cells.forEach((values, index) => {
     const row = rows[index]!;
-    const rendered = values.map((value, column) => {
-      const cell = column <= 1 ? space + value.padEnd(widths[column]!) + space : center(value, sizes[column]!);
-      // Telegram does not support nesting bold entities inside pre/code blocks.
-      // Bold Unicode letters retain one character per table column.
-      return column === 0 && value === 'SULBAGSEL' ? cell.replace(value, '𝗦𝗨𝗟𝗕𝗔𝗚𝗦𝗘𝗟') : cell;
-    });
+    // Keep the regional label in the same monospace font as the rest of the table.
+    // Mathematical bold Unicode glyphs trigger fallback fonts in Telegram clients.
+    const rendered = values.map((value, column) => column <= 1 ? space + value.padEnd(widths[column]!) + space : center(value, sizes[column]!));
     if (row.level === 'branch') {
       const mergedSize = sizes[0]! + sizes[1]! + 1;
       lines.push('│' + space + row.branch.padEnd(mergedSize - padding * 2) + space + '│' + rendered.slice(2).join('│') + '│');

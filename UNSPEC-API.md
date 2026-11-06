@@ -8,7 +8,7 @@
 - VALINS ODP, VALINS DC, parsing Excel, dan fitur balas laporan dengan foto tetap menggunakan alur sebelumnya.
 - Judul, isi, urutan Branch, rumus, pembulatan, daftar STO, serta legenda laporan UNSPEC tidak diubah.
 - Cetak Ulang pada menu live mengambil API terbaru. Tombol cetak dari CSV tetap mencetak snapshot CSV sesuai tanggalnya.
-- **SULBAGSEL REPORT** berada tepat di bawah CETAK SEMUA. Pilihan ini mengambil API sekali, kemudian mengirim satu pesan tabel teks per 21 Service Area dalam empat Branch: BRANCH, SERVICE AREA, SALDO (H/H-1/TARGET/GAP), CLOSE HI, REAL, ACH, dan label total Sulbagsel tebal. Pemisah baris dan spasi dipadatkan agar seluruh data muat 4.096 karakter; tombol menu/cetak ulang berada pada pesan yang sama. CLOSE HI memakai penurunan saldo bersih dari snapshot H-1 (`max(0,H-1−H)`), bukan klaim jumlah tiket closed atau posisi tepat 00.00 yang tidak terekam. Jalur tabel juga tersedia untuk arsip CSV. Laporan teks sebelumnya tetap ada.
+- **SULBAGSEL REPORT** berada tepat di bawah CETAK SEMUA. Pilihan ini mengambil API sekali, kemudian mengirim satu pesan tabel teks per 21 Service Area dalam empat Branch: BRANCH, SERVICE AREA, SALDO (H/H-1/TARGET/GAP), CLOSE HI, REAL, ACH, dan baris total SULBAGSEL dengan font monospace yang seragam. Pemisah baris dan spasi dipadatkan agar seluruh data muat 4.096 karakter; tombol menu/cetak ulang berada pada pesan yang sama. CLOSE HI memakai penurunan saldo bersih dari snapshot H-1 (`max(0,H-1−H)`), bukan klaim jumlah tiket closed atau posisi tepat 00.00 yang tidak terekam. Jalur tabel juga tersedia untuk arsip CSV. Laporan teks sebelumnya tetap ada.
 
 ## Konfigurasi dan deployment
 

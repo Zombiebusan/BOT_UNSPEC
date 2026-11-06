@@ -30,7 +30,7 @@ Menu UNSPEC memiliki tombol **📊 SULBAGSEL REPORT** tepat di bawah **CETAK SEM
 - Header: **BRANCH**, **SERVICE AREA**, **SALDO** (H, H-1, TARGET, GAP), **CLOSE HI**, **REAL**, **ACH**.
 - Rincian 21 Service Area mengikuti urutan **MAKASSAR, BONE, PARE PARE, KENDARI**. Masing-masing kelompok SA diikuti satu subtotal Branch pada baris tersendiri, dengan sel BRANCH + SERVICE AREA digabung secara teks. Baris terakhir adalah total **SULBAGSEL**. Seluruh 50 STO masuk tepat satu SA; subtotal tidak dihitung lagi dalam total regional.
 - Jalur API mengambil satu snapshot terbaru beserta H-1. Menekan SULBAGSEL REPORT kembali mengambil API lagi.
-- Label Sulbagsel pada baris total memakai huruf Unicode tebal agar tetap terlihat tebal di blok monospace Telegram tanpa markup bold bersarang.
+- Label SULBAGSEL pada baris total memakai huruf standar dengan font monospace yang sama seperti semua kolom. Huruf Unicode bergaya tebal tidak digunakan karena dapat memicu font fallback dan membuat garis tabel tidak sejajar pada klien Telegram.
 - Menu UNSPEC dari unggahan CSV juga memiliki tombol tabel yang memakai arsip pada tanggal upload tersebut.
 - H-1 yang tidak tersedia ditampilkan `—`. Target = floor(LIS / 1000); GAP = max(0, H − target); REAL = H / LIS × 100%; ACH = min(100%, 0,10% / REAL × 100%), dengan ACH saldo nol = 100%.
 - Target dan GAP baris Sulbagsel dihitung dari total regional, bukan penjumlahan pembulatan atau GAP tiap Branch.

@@ -59,7 +59,13 @@ test('all 50 STOs belong to exactly one Service Area in the supplied order', () 
 test('renderer preserves merged headers, aligned table borders and Telegram monospace text', () => {
   const table = renderUnspecTableText(current, previous);
   for (const label of ['BRANCH', 'SERVICE AREA', 'SALDO', 'H-1', 'TARGET', 'GAP', 'CLOSE HI', 'REAL', 'ACH', 'SULBAGSEL', '100,00%']) assert.ok(table.normalize('NFKC').includes(label));
-  assert.ok(table.includes('𝗦𝗨𝗟𝗕𝗔𝗚𝗦𝗘𝗟'));
+  assert.ok(table.includes('SULBAGSEL'));
+  assert.ok(!/[\u{1D400}-\u{1D7FF}]/u.test(table), 'styled Unicode must not trigger a different font in the total row');
+  const lines = table.split('\n');
+  const regionalLine = lines.find(line => line.includes('SULBAGSEL'))!;
+  const detailLine = lines.find(line => line.includes('SA TAMALANREA'))!;
+  const separators = (line: string) => Array.from(line).flatMap((character, index) => character === '│' ? [index] : []);
+  assert.deepEqual(separators(regionalLine), separators(detailLine), 'all regional columns must align with the SA columns');
   assert.equal(new Set(table.split('\n').map(line => Array.from(line).length)).size, 1, 'all table lines must have equal visible character counts');
   const messages = unspecTableMessages(current, previous, '2026-11-05');
   assert.equal(messages.length, 1);
@@ -72,7 +78,7 @@ test('renderer preserves merged headers, aligned table borders and Telegram mono
   }
   const combined = messages.map(message => message.text).join('\n');
   for (const area of UNSPEC_SERVICE_AREAS) assert.equal(combined.split(area.label).length - 1, 1, 'every SA must appear once in the single report');
-  assert.equal(combined.split('𝗦𝗨𝗟𝗕𝗔𝗚𝗦𝗘𝗟').length - 1, 1);
+  assert.equal(combined.split('│ SULBAGSEL').length - 1, 1);
 });
 
 test('large balances expand columns without breaking alignment or Telegram length limit', () => {
