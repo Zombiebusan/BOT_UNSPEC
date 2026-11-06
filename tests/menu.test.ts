@@ -12,7 +12,8 @@ test('main menu has four features and every branch menu has all five print choic
     const buttons = branchMenu(kind, '2026-10-27').reply_markup!.inline_keyboard.flat();
     assert.deepEqual(buttons.slice(0, 5).map(button => parseMenuAction(button.callback_data)),
       ['PARE-PARE','BONE','KENDARI','MAKASSAR','SEMUA'].map(scope => ({ type: 'branch', kind, scope, date: '2026-10-27' })));
-    assert.deepEqual(parseMenuAction(buttons[5]!.callback_data), { type: 'main' });
+    if (kind === 'unspec') assert.deepEqual(parseMenuAction(buttons[5]!.callback_data), { type: 'table', kind: 'unspec', date: '2026-10-27' });
+    assert.deepEqual(parseMenuAction(buttons[kind === 'unspec' ? 6 : 5]!.callback_data), { type: 'main' });
     assert.ok(buttons.every(button => Buffer.byteLength(button.callback_data) <= 64));
   }
 });

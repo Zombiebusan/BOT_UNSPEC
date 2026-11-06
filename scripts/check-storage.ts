@@ -153,6 +153,20 @@ try {
     await store.prepareLiveUnspec(base - 77, missingChat, 'api-user', 0, 'BONE', { ...live, previous: null });
     assert.match(String((await store.getJob(base - 77))!.messages[0]), /SALDO \(H-1\): Belum tersedia/);
     console.log('Uji cetak API lulus: tanpa CSV, H-1 dashboard, semua/selected branch, retry, dan source ordering.');
+    await store.prepareLiveUnspec(base - 76, liveChat, 'api-user', 42, 'SEMUA', live, 'table');
+    const imageJob = (await store.getJob(base - 76))!;
+    assert.equal(imageJob.messages.length, 2);
+    const image = imageJob.messages[0];
+    assert.ok(image && typeof image !== 'string' && image.type === 'photo' && image.upload);
+    assert.equal(Buffer.from(image.upload.base64, 'base64').subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+    await store.prepareLiveUnspec(base - 76, liveChat, 'api-user', 42, 'SEMUA', { ...live, snapshot: snapshot(9) }, 'table');
+    assert.deepEqual((await store.getJob(base - 76))!.messages, imageJob.messages);
+    await store.prepareMenu(base - 75, flowChat, context.userId, 0, { type: 'table', kind: 'unspec', date: '2026-10-28' });
+    const archivedImage = (await store.getJob(base - 75))!.messages[0];
+    assert.ok(archivedImage && typeof archivedImage !== 'string' && archivedImage.type === 'photo' && archivedImage.upload);
+    assert.match(archivedImage.caption!, /2026-10-28/);
+    await assert.rejects(store.prepareMenu(base - 74, flowChat, context.userId, 0, { type: 'table', kind: 'unspec', date: '2026-10-27' }), InputError);
+    console.log('Uji tabel PNG lulus: tersimpan dalam job, retry identik, dan arsip terikat tanggal CSV.');
 
     if (workbook) {
       const valinsChat = `integration-check:${randomUUID()}`;

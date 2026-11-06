@@ -19,6 +19,7 @@ export interface PhotoMessage {
   photo: string;
   caption?: string;
   reply_parameters?: ReplyParameters;
+  upload?: { filename: string; base64: string };
 }
 
 // Strings keep jobs prepared by earlier deployments readable during upgrades.

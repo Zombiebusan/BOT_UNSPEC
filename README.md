@@ -23,6 +23,26 @@ Tombol **Cetak Ulang** UNSPEC live mengambil API lagi; **Ganti Branch** membuka 
 
 Setelah deploy versi menu tombol, jalankan **`npm run webhook:set`** agar Telegram mengirim update `callback_query` dari tombol. Database menu dibuat dengan `npm run db:setup` (sudah dijalankan pada database proyek saat fitur dibangun).
 
+## Cetak tabel UNSPEC
+
+Menu UNSPEC memiliki tombol **📊 CETAK TABEL** tepat di bawah **CETAK SEMUA**. Tombol mengirim satu gambar PNG tabel, bukan empat pesan teks. Laporan teks lama tetap tersedia melalui pilihan Branch dan CETAK SEMUA.
+
+- Header: **BRANCH**, **SALDO** (H, H-1, TARGET, GAP), **REAL**, **ACH**.
+- Urutan: **MAKASSAR, BONE, PARE PARE, KENDARI, SULBAGSEL**.
+- Jalur API mengambil satu snapshot terbaru beserta H-1. Tombol Cetak Ulang Tabel mengambil API lagi.
+- Menu UNSPEC dari unggahan CSV juga memiliki tombol tabel yang memakai arsip pada tanggal upload tersebut.
+- H-1 yang tidak tersedia ditampilkan `—`. Target = floor(LIS / 1000); GAP = max(0, H − target); REAL = H / LIS × 100%; ACH = min(100%, 0,10% / REAL × 100%), dengan ACH saldo nol = 100%.
+- Target dan GAP baris Sulbagsel dihitung dari total regional, bukan penjumlahan pembulatan atau GAP tiap Branch.
+- PNG disiapkan dan disimpan dalam job pengiriman; retry tidak mengganti angka pada gambar yang sudah disiapkan.
+
+Renderer memakai `@resvg/resvg-js` dan font DejaVu Sans yang disertakan dalam dependency, sehingga tidak membutuhkan browser atau font sistem di Vercel. Preview tanpa mengirim Telegram:
+
+```powershell
+npm run unspec:table:preview -- "hari-ini.csv" "hari-kemarin.csv" "2026-11-05" "output.png"
+```
+
+Gunakan `-` untuk CSV H-1 jika belum tersedia. Tidak ada environment variable tambahan untuk fitur tabel; lakukan deploy ulang proyek bot agar dependency dan tombol baru aktif.
+
 ## Laporan bergambar melalui Reply/Balas
 
 1. Buat laporan UNSPEC atau VALINS seperti biasa.

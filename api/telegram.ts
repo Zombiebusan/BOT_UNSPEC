@@ -14,7 +14,7 @@ const HELP = [
   '📖 PANDUAN SINGKAT', '',
   'MEMBUAT LAPORAN',
   '1. Ketik /start atau /menu.',
-  '2. UNSPEC: pilih branch atau Cetak Semua, data terbaru diambil dari API.',
+  '2. UNSPEC: pilih branch, Cetak Semua, atau Cetak Tabel; data terbaru diambil dari API.',
   '3. VALINS: upload Excel sebagai dokumen, lalu pilih branch atau Cetak Semua.', '',
   '📎 FORMAT FILE',
   '• UNSPEC: tidak wajib upload. CSV (.csv) tetap tersedia untuk arsip/koreksi.',
@@ -90,9 +90,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       try {
         if (callback) {
           const action = parseMenuAction(callback.data ?? '');
-          if (action.type === 'live') {
+          if (action.type === 'live' || (action.type === 'table' && !action.date)) {
             const live = await new UnspecApi(config).latest(Math.max(1000, Math.min(42000, 45000 - (Date.now() - started))));
-            await store.prepareLiveUnspec(update.update_id, chatId, userId, threadId, action.scope, live);
+            if (action.type === 'table') await store.prepareLiveUnspec(update.update_id, chatId, userId, threadId, 'SEMUA', live, 'table');
+            else await store.prepareLiveUnspec(update.update_id, chatId, userId, threadId, action.scope, live);
           } else await store.prepareMenu(update.update_id, chatId, userId, threadId, action);
         } else if (message.photo?.length) {
           const messages = prepareReportPhoto(message, config.token.split(':')[0]!);

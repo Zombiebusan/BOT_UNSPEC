@@ -95,3 +95,25 @@ test('group migration errors retain the destination metadata for recovery', asyn
     return true;
   });
 });
+
+test('generated table photo uses multipart PNG upload, preserving topic and reply context', async t => {
+  const png = Buffer.from('89504e470d0a1a0a', 'hex');
+  t.mock.method(globalThis, 'fetch', async (url: string, options: RequestInit) => {
+    assert.match(url, /\/sendPhoto$/);
+    assert.ok(options.body instanceof FormData);
+    assert.equal(new Headers(options.headers).has('content-type'), false, 'fetch must generate the multipart boundary');
+    const form = options.body;
+    assert.equal(form.get('chat_id'), '-100123');
+    assert.equal(form.get('message_thread_id'), '42');
+    assert.equal(form.get('caption'), 'Tabel UNSPEC');
+    assert.equal(form.get('reply_parameters'), JSON.stringify({ message_id: 55 }));
+    const photo = form.get('photo') as File;
+    assert.equal(photo.name, 'table.png');assert.equal(photo.type, 'image/png');
+    assert.deepEqual(Buffer.from(await photo.arrayBuffer()), png);
+    return Response.json({ ok: true, result: {} });
+  });
+  await new Telegram('test-token').send('-100123', {
+    type: 'photo', photo: 'attach://report_image', caption: 'Tabel UNSPEC', reply_parameters: { message_id: 55 },
+    upload: { filename: 'table.png', base64: png.toString('base64') }
+  }, 42);
+});

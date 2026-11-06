@@ -10,6 +10,7 @@ import type { ReportPreference } from '../src/menu.js';
 import type { OutgoingMessage } from '../src/messages.js';
 import { UnspecApi } from '../src/unspec-api.js';
 import { InputError, parseSnapshot, renderReports, witaDate } from '../src/report.js';
+import { unspecTableMessage } from '../src/unspec-table.js';
 
 test('webhook verifies the secret and accepts all users without an account allowlist', async t => {
   const original = { ...process.env };
@@ -228,7 +229,7 @@ test('photo reply creates a delivery job and retries long-report text without se
   }
 });
 
-test('UNSPEC live print bypasses CSV and stale menu dates; retries reuse one frozen report set', async t => {
+test('UNSPEC live text/table print bypasses CSV and stale menu dates; retries reuse one frozen report set', async t => {
   const original = { ...process.env };
   Object.assign(process.env, { TELEGRAM_BOT_TOKEN: '777:test', TELEGRAM_WEBHOOK_SECRET: 'test_secret_12345678', DATABASE_URL: 'postgresql://not-connected' });
   const now = Math.floor(Date.now() / 1000), date = witaDate(now);
@@ -240,16 +241,16 @@ test('UNSPEC live print bypasses CSV and stale menu dates; retries reuse one fro
   const csv = t.mock.method(Telegram.prototype, 'downloadCsv', async () => { throw new Error('CSV must not be downloaded'); });
   const valins = t.mock.method(Store.prototype, 'prepareValinsUpload', async () => { throw new Error('VALINS must not change'); });
   t.mock.method(Telegram.prototype, 'answerCallback', async () => {});
-  const prepare = t.mock.method(Store.prototype, 'prepareLiveUnspec', async (id: number, chat: string, _user: string, _thread: number, _scope: unknown, input: typeof live) => {
-    const messages = renderReports(input.snapshot, input.previous, input.timestamp, input.date);
+  const prepare = t.mock.method(Store.prototype, 'prepareLiveUnspec', async (id: number, chat: string, _user: string, _thread: number, _scope: unknown, input: typeof live, format?: 'text' | 'table') => {
+    const messages = format === 'table' ? [unspecTableMessage(input.snapshot, input.previous, input.date)] : renderReports(input.snapshot, input.previous, input.timestamp, input.date);
     jobs.set(id, { update_id: String(id), chat_id: chat, messages, delivered: messages.length });
   });
   t.mock.method(Store.prototype, 'prepareMessages', async (id: number, chat: string, messages: OutgoingMessage[]) => { jobs.set(id, { update_id: String(id), chat_id: chat, messages, delivered: messages.length }); });
-  const run = async (id: number) => {
+  const run = async (id: number, callback = 'live:unspec:SEMUA') => {
     let status = 0;
     const response = { setHeader() {}, status(code: number) { status = code; return this; }, json() {} } as unknown as ApiResponse;
     await handler({ method: 'POST', headers: { 'x-telegram-bot-api-secret-token': 'test_secret_12345678' }, body: {
-      update_id: id, callback_query: { id: 'callback', from: { id: 456 }, data: 'live:unspec:SEMUA', message: {
+      update_id: id, callback_query: { id: 'callback', from: { id: 456 }, data: callback, message: {
         message_id: 20, date: 1, from: { id: 777, is_bot: true }, chat: { id: -100123 }, message_thread_id: 42
       } }
     } } as unknown as ApiRequest, response);
@@ -263,9 +264,16 @@ test('UNSPEC live print bypasses CSV and stale menu dates; retries reuse one fro
     assert.equal(jobs.get(600)!.messages.length, 4);
     assert.deepEqual(jobs.get(600)!.messages, renderReports(snapshot, null, now, date));
     assert.equal(csv.mock.callCount(), 0);assert.equal(valins.mock.callCount(), 0);
+    assert.equal(await run(602, 'table:unspec:live'), 200);
+    assert.equal(await run(602, 'table:unspec:live'), 200);
+    assert.equal(latest.mock.callCount(), 2);
+    assert.equal(prepare.mock.calls[1]!.arguments[6], 'table');
+    const image = jobs.get(602)!.messages[0];
+    assert.ok(image && typeof image !== 'string' && image.type === 'photo' && image.upload);
+    assert.equal(Buffer.from(image.upload.base64, 'base64').subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
     latest.mock.mockImplementation(async () => { throw new InputError('API sementara gagal.'); });
     assert.equal(await run(601), 200);
-    assert.equal(prepare.mock.callCount(), 1);
+    assert.equal(prepare.mock.callCount(), 2);
     assert.match(String(jobs.get(601)!.messages[0]), /API sementara gagal/);
   } finally {
     for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];

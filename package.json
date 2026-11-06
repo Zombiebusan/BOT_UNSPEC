@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": "24.x" },
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "tsx --test tests/*.test.ts",
@@ -13,10 +15,13 @@
     "queue:recover": "tsx scripts/recover-queue.ts",
     "webhook:set": "tsx scripts/set-webhook.ts",
     "report:preview": "tsx scripts/preview.ts",
+    "unspec:table:preview": "tsx scripts/preview-unspec-table.ts",
     "valins:preview": "tsx scripts/preview-valins.ts"
   },
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "csv-parse": "^7.0.3",
+    "dejavu-fonts-ttf": "^2.37.3",
     "dotenv": "^17.2.3",
     "postgres": "^3.4.7",
     "read-excel-file": "^9.3.12"

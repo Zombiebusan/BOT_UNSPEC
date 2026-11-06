@@ -3,8 +3,9 @@ import { InputError, previousDate, reconciliation, renderReports, stripReportTim
 import { renderValinsReports, type ValinsKind, type ValinsScope, type ValinsSnapshot } from './valins.js';
 import { BRANCHES } from './master.js';
 import type { OutgoingMessage } from './messages.js';
-import { branchMenu, liveUnspecMenu, mainMenu, selectedLiveUnspecMenu, selectedMenu, uploadPrompt, valinsKind, type MenuAction, type ReportPreference, type UploadMenuContext } from './menu.js';
+import { branchMenu, liveUnspecMenu, mainMenu, selectedLiveUnspecMenu, selectedUnspecTableMenu, selectedMenu, uploadPrompt, valinsKind, type MenuAction, type ReportPreference, type UploadMenuContext } from './menu.js';
 import type { LiveUnspecReport } from './unspec-api.js';
+import { unspecTableMessage } from './unspec-table.js';
 
 let client: ReturnType<typeof postgres> | undefined;
 export function database(url: string): ReturnType<typeof postgres> {
@@ -96,7 +97,7 @@ export class Store {
     return rows[0] ? selectUnspecReports(rows[0].reports, scope) : ['Belum ada laporan untuk tanggal tersebut. Upload CSV terlebih dahulu.'];
   }
 
-  async prepareLiveUnspec(updateId: number, chatId: string, userId: string, threadId: number, scope: ValinsScope, live: LiveUnspecReport): Promise<void> {
+  async prepareLiveUnspec(updateId: number, chatId: string, userId: string, threadId: number, scope: ValinsScope, live: LiveUnspecReport, format: 'text' | 'table' = 'text'): Promise<void> {
     await this.sql.begin(async tx => {
       await tx`SELECT pg_advisory_xact_lock(hashtextextended(${chatId}, 0))`;
       if ((await tx`SELECT update_id FROM telegram_jobs WHERE update_id = ${updateId}`).length) return;
@@ -116,7 +117,9 @@ export class Store {
       await tx`INSERT INTO report_preferences (chat_id, user_id, thread_id, report_type, scope, upload_date)
         VALUES (${chatId}, ${userId}, ${threadId}, 'unspec', ${scope}, ${live.date}::date)
         ON CONFLICT (chat_id, user_id, thread_id) DO UPDATE SET report_type = EXCLUDED.report_type, scope = EXCLUDED.scope, upload_date = EXCLUDED.upload_date, updated_at = NOW()`;
-      const messages = [...selectUnspecReports(reports, scope), selectedLiveUnspecMenu(scope, live.date, live.fetchedAt, previous !== null)];
+      const messages = format === 'table'
+        ? [unspecTableMessage(live.snapshot, previous, live.date), selectedUnspecTableMenu(live.date, true)]
+        : [...selectUnspecReports(reports, scope), selectedLiveUnspecMenu(scope, live.date, live.fetchedAt, previous !== null)];
       await tx`INSERT INTO telegram_jobs (update_id, chat_id, messages) VALUES (${updateId}, ${chatId}, ${tx.json(messages as unknown as postgres.JSONValue)})`;
     });
   }
@@ -170,7 +173,7 @@ export class Store {
   }
 
   async prepareMenu(updateId: number, chatId: string, userId: string, threadId: number, action: MenuAction): Promise<void> {
-    if (action.type === 'live') throw new InputError('Gunakan pemrosesan API untuk cetak UNSPEC terbaru.');
+    if (action.type === 'live' || (action.type === 'table' && !action.date)) throw new InputError('Gunakan pemrosesan API untuk cetak UNSPEC terbaru.');
     await this.sql.begin(async tx => {
       await tx`SELECT pg_advisory_xact_lock(hashtextextended(${chatId}, 0))`;
       const existing = await tx`SELECT update_id FROM telegram_jobs WHERE update_id = ${updateId}`;
@@ -201,6 +204,12 @@ export class Store {
         if (action.type === 'branches') {
           const old = action.kind === 'unspec' ? await tx`SELECT 1 FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${previousDate(date)}::date` : [];
           messages = [branchMenu(action.kind, date, Boolean(old.length))];
+        } else if (action.type === 'table') {
+          const rows = await tx<{ snapshot: Snapshot }[]>`SELECT snapshot FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${date}::date`;
+          if (!rows[0]) throw new InputError('Data upload tidak ditemukan. Silakan upload ulang file Anda.');
+          const old = await tx<{ snapshot: Snapshot }[]>`SELECT snapshot FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${previousDate(date)}::date`;
+          await tx`UPDATE report_preferences SET scope = 'SEMUA', updated_at = NOW() WHERE chat_id = ${chatId} AND user_id = ${userId} AND thread_id = ${threadId}`;
+          messages = [unspecTableMessage(rows[0].snapshot, old[0]?.snapshot ?? null, date), selectedUnspecTableMenu(date, false)];
         } else {
           let reports: string[] = [];
           if (action.kind === 'unspec') {

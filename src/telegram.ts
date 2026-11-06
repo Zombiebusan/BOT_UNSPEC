@@ -33,12 +33,12 @@ export class TelegramError extends Error {
 export class Telegram {
   constructor(private readonly token: string) {}
 
-  async call<T>(method: string, body: Record<string, unknown>): Promise<T> {
+  async call<T>(method: string, body: Record<string, unknown> | FormData): Promise<T> {
     let response: Response;
     try {
       response = await fetch(`https://api.telegram.org/bot${this.token}/${method}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body), signal: AbortSignal.timeout(8000)
+        method: 'POST', ...(body instanceof FormData ? {} : { headers: { 'Content-Type': 'application/json' } }),
+        body: body instanceof FormData ? body : JSON.stringify(body), signal: AbortSignal.timeout(8000)
       });
     } catch {
       throw new TelegramError(503);
@@ -57,6 +57,16 @@ export class Telegram {
       ...(typeof message !== 'string' && message.reply_parameters ? { reply_parameters: message.reply_parameters } : {})
     };
     if (typeof message !== 'string' && message.type === 'photo') {
+      if (message.upload) {
+        const form = new FormData();
+        form.set('chat_id', chatId);
+        if (threadId) form.set('message_thread_id', String(threadId));
+        if (message.caption) form.set('caption', message.caption);
+        if (message.reply_parameters) form.set('reply_parameters', JSON.stringify(message.reply_parameters));
+        form.set('photo', new Blob([new Uint8Array(Buffer.from(message.upload.base64, 'base64'))], { type: 'image/png' }), message.upload.filename);
+        await this.call('sendPhoto', form);
+        return;
+      }
       await this.call('sendPhoto', {
         ...context, photo: message.photo,
         ...(message.caption ? { caption: message.caption } : {})

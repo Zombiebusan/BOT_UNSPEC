@@ -10,6 +10,7 @@ export interface UploadMenuContext { kind: ReportType; userId: string; threadId:
 export type MenuAction = { type: 'main' } | { type: 'kind'; kind: ReportType } |
   { type: 'upload'; kind: 'unspec' } | { type: 'live-menu'; kind: 'unspec' } |
   { type: 'live'; kind: 'unspec'; scope: ValinsScope } |
+  { type: 'table'; kind: 'unspec'; date?: string } |
   { type: 'branches'; kind: ReportType; date: string } |
   { type: 'branch' | 'print'; kind: ReportType; scope: ValinsScope; date?: string };
 
@@ -44,6 +45,7 @@ export function liveUnspecMenu(): RichMessage {
     reply_markup: { inline_keyboard: [
       [button('PARE-PARE'), button('BONE')], [button('KENDARI'), button('MAKASSAR')],
       [button('SEMUA', '🖨 CETAK SEMUA')],
+      [{ text: '📊 CETAK TABEL', callback_data: 'table:unspec:live' }],
       [{ text: '📤 CSV / Arsip', callback_data: 'upload:unspec' }],
       [{ text: '🏠 Menu Utama', callback_data: 'menu:main' }]
     ] }
@@ -56,6 +58,16 @@ export function selectedLiveUnspecMenu(scope: ValinsScope, date: string, fetched
     reply_markup: { inline_keyboard: [
       [{ text: '🖨 Cetak Ulang', callback_data: `live:unspec:${scope}` }],
       [{ text: '⬅️ Ganti Branch', callback_data: 'live:unspec:menu' }, { text: '📤 CSV / Arsip', callback_data: 'upload:unspec' }],
+      [{ text: '🏠 Menu Utama', callback_data: 'menu:main' }]
+    ] }
+  };
+}
+export function selectedUnspecTableMenu(date: string, live: boolean): RichMessage {
+  return {
+    text: `✅ Tabel UNSPEC Sulbagsel sudah dicetak.\n📅 Tanggal data: ${date}\n\n${live ? 'Cetak Ulang Tabel mengambil API terbaru.' : 'Tabel menggunakan snapshot CSV sesuai tanggal pilihan.'}`,
+    reply_markup: { inline_keyboard: [
+      [{ text: '📊 Cetak Ulang Tabel', callback_data: `table:unspec:${live ? 'live' : date}` }],
+      [{ text: '⬅️ Ganti Branch', callback_data: live ? 'live:unspec:menu' : `branches:unspec:${date}` }],
       [{ text: '🏠 Menu Utama', callback_data: 'menu:main' }]
     ] }
   };
@@ -89,6 +101,7 @@ export function branchMenu(kind: ReportType, date: string, hasPrevious?: boolean
       [button('PARE-PARE'), button('BONE')],
       [button('KENDARI'), button('MAKASSAR')],
       [button('SEMUA', '🖨 CETAK SEMUA')],
+      ...(kind === 'unspec' ? [[{ text: '📊 CETAK TABEL', callback_data: `table:unspec:${date}` }]] : []),
       [{ text: '⬅️ Menu Utama', callback_data: 'menu:main' }]
     ] }
   };
@@ -113,9 +126,11 @@ export function parseMenuAction(data: string): MenuAction {
   if (data === 'menu:main') return { type: 'main' };
   if (data === 'upload:unspec') return { type: 'upload', kind: 'unspec' };
   if (data === 'live:unspec:menu') return { type: 'live-menu', kind: 'unspec' };
+  if (data === 'table:unspec:live') return { type: 'table', kind: 'unspec' };
   const parts = data.split(':');
   const [action, kind, scope] = parts;
   if (!REPORT_TYPES.includes(kind as ReportType)) throw new InputError('Pilihan menu tidak valid. Ketik /start untuk membuka menu baru.');
+  if (action === 'table' && kind === 'unspec' && parts.length === 3 && scope && validDate(scope)) return { type: 'table', kind: 'unspec', date: scope };
   if (action === 'live' && kind === 'unspec' && parts.length === 3 && (scope === 'SEMUA' || BRANCHES.includes(scope as (typeof BRANCHES)[number]))) return { type: 'live', kind: 'unspec', scope: scope as ValinsScope };
   if (action === 'menu' && parts.length === 2) return { type: 'kind', kind: kind as ReportType };
   if (action === 'branches' && parts.length === 3 && scope && validDate(scope)) {
