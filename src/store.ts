@@ -118,7 +118,7 @@ export class Store {
         VALUES (${chatId}, ${userId}, ${threadId}, 'unspec', ${scope}, ${live.date}::date)
         ON CONFLICT (chat_id, user_id, thread_id) DO UPDATE SET report_type = EXCLUDED.report_type, scope = EXCLUDED.scope, upload_date = EXCLUDED.upload_date, updated_at = NOW()`;
       const messages = format === 'table'
-        ? [...unspecTableMessages(live.snapshot, previous, live.date), selectedUnspecTableMenu(live.date, true)]
+        ? unspecTableMessages(live.snapshot, previous, live.date).map(message => ({ ...message, reply_markup: selectedUnspecTableMenu(live.date, true).reply_markup }))
         : [...selectUnspecReports(reports, scope), selectedLiveUnspecMenu(scope, live.date, live.fetchedAt, previous !== null)];
       await tx`INSERT INTO telegram_jobs (update_id, chat_id, messages) VALUES (${updateId}, ${chatId}, ${tx.json(messages as unknown as postgres.JSONValue)})`;
     });
@@ -209,7 +209,7 @@ export class Store {
           if (!rows[0]) throw new InputError('Data upload tidak ditemukan. Silakan upload ulang file Anda.');
           const old = await tx<{ snapshot: Snapshot }[]>`SELECT snapshot FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${previousDate(date)}::date`;
           await tx`UPDATE report_preferences SET scope = 'SEMUA', updated_at = NOW() WHERE chat_id = ${chatId} AND user_id = ${userId} AND thread_id = ${threadId}`;
-          messages = [...unspecTableMessages(rows[0].snapshot, old[0]?.snapshot ?? null, date), selectedUnspecTableMenu(date, false)];
+          messages = unspecTableMessages(rows[0].snapshot, old[0]?.snapshot ?? null, date).map(message => ({ ...message, reply_markup: selectedUnspecTableMenu(date, false).reply_markup }));
         } else {
           let reports: string[] = [];
           if (action.kind === 'unspec') {

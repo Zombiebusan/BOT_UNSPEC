@@ -68,9 +68,10 @@ function tableWidths(rows: UnspecServiceAreaRow[]): number[] {
   const cells = tableCells(rows);
   return TABLE_HEADERS.map((header, column) => Math.max(header.length, ...cells.map(row => row[column]!.length)));
 }
-function renderRows(rows: UnspecServiceAreaRow[], widths: number[]): string {
+function renderRows(rows: UnspecServiceAreaRow[], widths: number[], padding = 1): string {
   const cells = tableCells(rows);
-  const sizes = widths.map(width => width + 2);
+  const sizes = widths.map(width => width + padding * 2);
+  const space = ' '.repeat(padding);
   const center = (value: string, size: number): string => ' '.repeat(Math.floor((size - value.length) / 2)) + value + ' '.repeat(Math.ceil((size - value.length) / 2));
   const border = (left: string, middle: string, right: string, firstJoin = middle) => left + sizes.map((size, index) => '─'.repeat(size) + (index === sizes.length - 1 ? right : index === 0 ? firstJoin : middle)).join('');
   const saldoWidth = sizes.slice(2, 6).reduce((sum, size) => sum + size, 0) + 3;
@@ -85,17 +86,17 @@ function renderRows(rows: UnspecServiceAreaRow[], widths: number[]): string {
   cells.forEach((values, index) => {
     const row = rows[index]!;
     const rendered = values.map((value, column) => {
-      const cell = column <= 1 ? ' ' + value.padEnd(widths[column]!) + ' ' : center(value, sizes[column]!);
+      const cell = column <= 1 ? space + value.padEnd(widths[column]!) + space : center(value, sizes[column]!);
       // Telegram does not support nesting bold entities inside pre/code blocks.
       // Bold Unicode letters retain one character per table column.
       return column === 0 && value === 'SULBAGSEL' ? cell.replace(value, '𝗦𝗨𝗟𝗕𝗔𝗚𝗦𝗘𝗟') : cell;
     });
     if (row.level === 'branch') {
       const mergedSize = sizes[0]! + sizes[1]! + 1;
-      lines.push('│ ' + row.branch.padEnd(mergedSize - 2) + ' │' + rendered.slice(2).join('│') + '│');
+      lines.push('│' + space + row.branch.padEnd(mergedSize - padding * 2) + space + '│' + rendered.slice(2).join('│') + '│');
     } else lines.push('│' + rendered.join('│') + '│');
     if (index === cells.length - 1) lines.push(border('└', '┴', '┘', row.level === 'branch' ? '─' : '┴'));
-    else lines.push(border('├', '┼', '┤', row.level === 'branch' ? '┬' : rows[index + 1]!.level === 'branch' ? '┴' : '┼'));
+    else if (row.level === 'branch' || rows[index + 1]!.level !== 'sa') lines.push(border('├', '┼', '┤', row.level === 'branch' ? '┬' : rows[index + 1]!.level === 'branch' ? '┴' : '┼'));
   });
   return lines.join('\n');
 }
@@ -108,22 +109,13 @@ export function renderUnspecTableText(snapshot: Snapshot, previous: Snapshot | n
 export function unspecTableMessages(snapshot: Snapshot, previous: Snapshot | null, date: string): RichMessage[] {
   if (!validDate(date)) throw new InputError('Tanggal tabel UNSPEC tidak valid.');
   const rows = buildUnspecServiceAreaRows(snapshot, previous, date), widths = tableWidths(rows);
-  const compose = (part: UnspecServiceAreaRow[], index: number, count: number): RichMessage => {
-    const table = renderRows(part, widths).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return { type: 'text', parse_mode: 'HTML', text: `📊 SULBAGSEL REPORT${count > 1 ? ` — Bagian ${index}/${count}` : ''}\nTanggal data: ${date} (WITA)\nH-1: ${previousDate(date)}${previous ? '' : ' (belum tersedia)'}\nTarget maksimal: 0,10%\n\n<pre>${table}</pre>` };
+  const compose = (padding: number): RichMessage => {
+    const table = renderRows(rows, widths, padding).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return { type: 'text', parse_mode: 'HTML', text: `📊 SULBAGSEL REPORT\nTanggal data: ${date} (WITA)\nH-1: ${previousDate(date)}${previous ? '' : ' (belum tersedia)'}\nTarget maksimal: 0,10%\n\n<pre>${table}</pre>` };
   };
-  const groups: UnspecServiceAreaRow[][] = [];
-  for (const row of rows) {
-    if (groups.at(-1)?.[0]?.branch === row.branch) groups.at(-1)!.push(row);
-    else groups.push([row]);
+  for (const padding of [1, 0]) {
+    const message = compose(padding);
+    if (message.text.length <= 4096) return [message];
   }
-  const pages: UnspecServiceAreaRow[][] = [];
-  let page: UnspecServiceAreaRow[] = [];
-  for (const group of groups) {
-    if (compose([...page, ...group], 99, 99).text.length > 4096 && page.length) { pages.push(page); page = []; }
-    if (compose(group, 99, 99).text.length > 4096) throw new InputError('Kelompok tabel Service Area terlalu panjang untuk Telegram.');
-    page.push(...group);
-  }
-  if (page.length) pages.push(page);
-  return pages.map((part, index) => compose(part, index + 1, pages.length));
+  throw new InputError('Report terlalu panjang untuk satu pesan Telegram. Tidak ada baris yang dipotong.');
 }

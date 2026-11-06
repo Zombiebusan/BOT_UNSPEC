@@ -62,7 +62,8 @@ test('renderer preserves merged headers, aligned table borders and Telegram mono
   assert.ok(table.includes('𝗦𝗨𝗟𝗕𝗔𝗚𝗦𝗘𝗟'));
   assert.equal(new Set(table.split('\n').map(line => Array.from(line).length)).size, 1, 'all table lines must have equal visible character counts');
   const messages = unspecTableMessages(current, previous, '2026-11-05');
-  assert.ok(messages.length > 1);
+  assert.equal(messages.length, 1);
+  assert.ok(!messages[0]!.text.includes('Bagian'));
   for (const message of messages) {
     assert.equal(message.type, 'text');assert.equal(message.parse_mode, 'HTML');
     assert.ok(message.text.includes('<pre>'));assert.ok(message.text.length <= 4096);
@@ -70,7 +71,7 @@ test('renderer preserves merged headers, aligned table borders and Telegram mono
     assert.equal(new Set(message.text.match(/<pre>([\s\S]*)<\/pre>/)![1]!.split('\n').map(line => Array.from(line).length)).size, 1);
   }
   const combined = messages.map(message => message.text).join('\n');
-  for (const area of UNSPEC_SERVICE_AREAS) assert.equal(combined.split(area.label).length - 1, 1, 'every SA must appear once across pages');
+  for (const area of UNSPEC_SERVICE_AREAS) assert.equal(combined.split(area.label).length - 1, 1, 'every SA must appear once in the single report');
   assert.equal(combined.split('𝗦𝗨𝗟𝗕𝗔𝗚𝗦𝗘𝗟').length - 1, 1);
 });
 
@@ -79,7 +80,10 @@ test('large balances expand columns without breaking alignment or Telegram lengt
   const table = renderUnspecTableText(large, large);
   assert.equal(new Set(table.split('\n').map(line => Array.from(line).length)).size, 1);
   assert.ok(table.includes('100.000'));
-  assert.ok(unspecTableMessages(large, large, '2026-11-05').every(message => message.text.length <= 4096));
+  const messages = unspecTableMessages(large, large, '2026-11-05');
+  assert.equal(messages.length, 1);
+  assert.ok(messages[0]!.text.length <= 4096);
+  for (const area of UNSPEC_SERVICE_AREAS) assert.ok(messages[0]!.text.includes(area.label));
 });
 
 test('table button is immediately below print-all for UNSPEC only, with live and archive callbacks', () => {

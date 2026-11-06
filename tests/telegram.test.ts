@@ -128,8 +128,9 @@ test('monospace text table uses sendMessage with HTML parse mode and no photo', 
     assert.equal(body.text, '<pre>BRANCH │ SALDO</pre>');
     assert.equal(body.message_thread_id, 42);
     assert.equal('photo' in body, false);
+    assert.deepEqual(body.reply_markup, { inline_keyboard: [[{ text: 'Menu Utama', callback_data: 'menu:main' }]] });
     return Response.json({ ok: true, result: {} });
   });
-  await new Telegram('test-token').send('-100123', { type: 'text', text: '<pre>BRANCH │ SALDO</pre>', parse_mode: 'HTML' }, 42);
+  await new Telegram('test-token').send('-100123', { type: 'text', text: '<pre>BRANCH │ SALDO</pre>', parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: 'Menu Utama', callback_data: 'menu:main' }]] } }, 42);
   assert.equal(calls.length, 1);
 });

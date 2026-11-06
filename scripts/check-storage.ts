@@ -155,10 +155,11 @@ try {
     console.log('Uji cetak API lulus: tanpa CSV, H-1 dashboard, semua/selected branch, retry, dan source ordering.');
     await store.prepareLiveUnspec(base - 76, liveChat, 'api-user', 42, 'SEMUA', live, 'table');
     const tableJob = (await store.getJob(base - 76))!;
-    assert.ok(tableJob.messages.length >= 2);
+    assert.equal(tableJob.messages.length, 1);
     const table = tableJob.messages[0];
     assert.ok(table && typeof table !== 'string' && table.type === 'text');
     assert.equal(table.parse_mode, 'HTML');assert.ok(table.text.includes('<pre>'));
+    assert.equal(table.reply_markup!.inline_keyboard[0]![0]!.callback_data, 'table:unspec:live');
     await store.prepareLiveUnspec(base - 76, liveChat, 'api-user', 42, 'SEMUA', { ...live, snapshot: snapshot(9) }, 'table');
     assert.deepEqual((await store.getJob(base - 76))!.messages, tableJob.messages);
     await store.prepareMenu(base - 75, flowChat, context.userId, 0, { type: 'table', kind: 'unspec', date: '2026-10-28' });

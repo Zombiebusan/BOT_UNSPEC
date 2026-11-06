@@ -35,7 +35,7 @@ Menu UNSPEC memiliki tombol **📊 SULBAGSEL REPORT** tepat di bawah **CETAK SEM
 - H-1 yang tidak tersedia ditampilkan `—`. Target = floor(LIS / 1000); GAP = max(0, H − target); REAL = H / LIS × 100%; ACH = min(100%, 0,10% / REAL × 100%), dengan ACH saldo nol = 100%.
 - Target dan GAP baris Sulbagsel dihitung dari total regional, bukan penjumlahan pembulatan atau GAP tiap Branch.
 - CLOSE HI adalah penurunan saldo bersih `max(0, H-1 − H)`: misalnya 18 menjadi 17 menghasilkan 1; jika saldo naik menghasilkan 0. Ini bukan hitungan INCIDENT closed sebenarnya. Acuan mengikuti snapshot H-1 tersimpan, bukan rekonstruksi posisi tepat 00.00 jika data saat itu tidak pernah direkam. Jika H-1 tidak tersedia, CLOSE HI juga `—`.
-- Tabel panjang otomatis dibagi menjadi beberapa pesan, masing-masing maksimal 4.096 karakter, dengan header berulang. Satu Branch tidak dipotong di tengah, dan total Sulbagsel muncul sekali di bagian terakhir.
+- Seluruh report dikirim dalam **satu pesan**, maksimal 4.096 karakter. Garis horizontal dipadatkan ke header dan subtotal Branch; seluruh baris SA dan total Sulbagsel tetap ada. Spasi dipadatkan lagi bila angkanya panjang. Tombol menu/cetak ulang ditempel pada pesan report yang sama, tanpa pesan konfirmasi terpisah.
 - Teks tabel disiapkan dan disimpan dalam job pengiriman; retry tidak mengganti angka pada laporan yang sudah disiapkan.
 
 Tabel dikirim melalui `sendMessage` dengan HTML `<pre>`, sehingga spasi, garis, dan kolom tetap sejajar. Tidak ada gambar atau font khusus yang diperlukan. Preview tanpa mengirim Telegram:
