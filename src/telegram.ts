@@ -80,8 +80,8 @@ export class Telegram {
     });
   }
 
-  async answerCallback(id: string): Promise<void> {
-    try { await this.call('answerCallbackQuery', { callback_query_id: id }); }
+  async answerCallback(id: string, text?: string): Promise<void> {
+    try { await this.call('answerCallbackQuery', { callback_query_id: id, ...(text ? { text } : {}) }); }
     catch (error) {
       // Expired/already acknowledged callbacks must not block a queued menu action.
       if (!(error instanceof TelegramError) || error.code !== 400) throw error;

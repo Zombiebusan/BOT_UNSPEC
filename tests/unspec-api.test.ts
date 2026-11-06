@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MASTER } from '../src/master.js';
 import { InputError, parseSnapshot, previousDate, renderReports, witaDate } from '../src/report.js';
-import { parseLiveUnspec, UnspecApi } from '../src/unspec-api.js';
+import { parseLiveUnspec, UnspecApi, UnspecPendingError } from '../src/unspec-api.js';
 import { liveUnspecMenu, parseMenuAction, selectedLiveUnspecMenu } from '../src/menu.js';
 
 const counts = (value = 0): Record<string, number> => Object.fromEntries(Object.keys(MASTER).map(code => [code, code === 'ANT' ? value : 0]));
@@ -81,4 +81,38 @@ test('API client uses POST bearer auth and safely handles upstream failures', as
   for (mode of [401, 409, 429, 503, 530, -1]) await assert.rejects(api.latest(), error => error instanceof InputError && !error.message.includes(token));
   assert.equal(fetchMock.mock.callCount(), 7);
   await assert.rejects(new UnspecApi({}).latest(), InputError);
+});
+
+test('asynchronous API is polled by stable request ID and completed result is validated', async t => {
+  const requestId = 'tg-integration-12345', now = Date.now();
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async (url: string, init?: RequestInit) => {
+    calls++;
+    if (calls === 1) {
+      assert.equal(init?.method, 'POST');assert.deepEqual(JSON.parse(String(init?.body)), { requestId });
+      return Response.json({ requestId, status: 'pending' }, { status: 202, headers: { 'Retry-After': '0' } });
+    }
+    assert.equal(init?.method, 'GET');assert.equal(new URL(url).searchParams.get('requestId'), requestId);
+    return Response.json({ ...payload(now), requestId, requestedAt: new Date(now - 1000).toISOString(), completedAt: new Date(now + 1).toISOString() });
+  });
+  const result = await new UnspecApi({ unspecApiUrl: 'https://example.test/api/bot/unspec', unspecApiToken: 'test-token' }).latest(1000, requestId);
+  assert.equal(result.snapshot.totalRows, 2);assert.equal(calls, 2);
+});
+test('pending request can resume on webhook retry instead of creating an error report', async t => {
+  const requestId = 'tg-integration-12345';
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ requestId, status: 'pending' }, { status: 202, headers: { 'Retry-After': '10' } }));
+  await assert.rejects(new UnspecApi({ unspecApiUrl: 'https://example.test/api/bot/unspec', unspecApiToken: 'test-token' }).latest(100, requestId),
+    error => error instanceof UnspecPendingError && error.requestId === requestId);
+});
+test('delayed delivery accepts only a matching completed job, not an arbitrary stale snapshot', () => {
+  const now = Date.parse('2026-11-06T02:00:00Z'), captured = now - 5 * 60_000;
+  const completed = { ...payload(captured), requestId: 'tg-integration-12345', requestedAt: new Date(captured - 10000).toISOString(), completedAt: new Date(captured + 10000).toISOString() };
+  assert.throws(() => parseLiveUnspec(completed, now), InputError);
+  assert.equal(parseLiveUnspec(completed, now, completed.requestId).snapshot.totalRows, 2);
+  assert.throws(() => parseLiveUnspec(completed, now, 'tg-different-12345'), InputError);
+});
+test('specific API failures are actionable without echoing arbitrary remote text', async t => {
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ code: 'UPSTREAM_TIMEOUT', error: 'arbitrary remote text must not be echoed' }, { status: 504 }));
+  await assert.rejects(new UnspecApi({ unspecApiUrl: 'https://example.test/api/bot/unspec', unspecApiToken: 'test-token' }).latest(),
+    error => error instanceof InputError && /MONICA terlalu lama/.test(error.message) && !error.message.includes('arbitrary'));
 });

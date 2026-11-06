@@ -45,17 +45,23 @@ Authorization: Bearer <UNSPEC_BOT_API_TOKEN>
 
 Respons sukses memuat `version: 1`, `scope: SULBAGSEL`, `cohort: PROACTIVE_UNSPEC`, `complete: true`, `date`, `fetchedAt`, `current`, dan `previous`.
 
+Bot juga mengirim JSON `{"requestId":"tg-<namespace-bot>-<update-id>"}`. Dashboard menyimpan permintaan ini secara persisten dan memberi HTTP 202 selama data disiapkan di background. Bot memeriksa hasil melalui GET endpoint yang sama dengan query `requestId`. Respons selesai menambahkan `requestId`, `requestedAt`, dan `completedAt`. Pengulangan requestId membaca pekerjaan yang sama, bukan memulai lagi pengambilan sumber.
+
 `current` berisi `countsByWorkzone` (seluruh 50 STO, termasuk saldo nol) serta `total`. `previous` memiliki struktur sama beserta tanggal H-1, atau `null` jika histori tanggal kemarin tidak tersedia. Tidak ada nama, nomor layanan, atau detail pelanggan dalam respons integrasi.
 
 - Pengambilan sumber memakai pagination lengkap, deduplikasi INCIDENT, filter WORKZONE Sulbagsel, dan filter proactive yang sama dengan dashboard.
 - Endpoint menyinkronkan data baru sebelum sukses. Snapshot lama tidak dikembalikan seolah-olah hasil live.
 - H dan H-1 berdasarkan kalender WITA, bukan REPORTED DATE tiket. Klik menu lama tidak mengubah tanggal data live menjadi tanggal pesan tombol.
 - Bot memvalidasi kelengkapan 50 STO, nilai saldo, total, scope, cohort, tanggal, dan kesegaran hasil API. LIS tetap memakai master bot sesuai tanggal masing-masing snapshot.
-- `401`: token tidak sesuai. `409`: sinkronisasi lain sedang berjalan, tekan cetak ulang. `503`: konfigurasi, sumber data, atau database belum siap; tidak ada laporan parsial yang dicetak.
+- `202`: pekerjaan belum selesai, bot menunggu/melanjutkan otomatis. `401`: token tidak sesuai. `503/504`: pekerjaan gagal atau konfigurasi/database belum siap, disertai kode penyebab yang aman. Jalur sinkron lama tanpa requestId tetap dapat mengembalikan `409` saat sibuk. Tidak ada laporan parsial yang dicetak.
 
 ## Batas waktu dan retry
 
-Pengambilan sumber dashboard dibatasi 38 detik. Bot membatasi permintaan sesuai sisa waktu webhook (maksimal 42 detik), menyimpan snapshot serta seluruh pesan secara atomik, lalu memakai antrean pengiriman yang sudah ada. Bila sisa durasi pengiriman habis, retry webhook melanjutkan pesan yang belum terkirim tanpa mengambil API lagi. API gagal menghasilkan pesan kegagalan yang aman dan tidak mengganti snapshot valid sebelumnya.
+Worker dashboard berjalan setelah respons 202, maksimal 210 detik, dalam function berdurasi maksimal 300 detik. Setiap permintaan halaman sumber memiliki batas 45 detik. Worker menunggu lease sinkronisasi yang sedang aktif atau memakai hasil yang diambil sesudah request tersebut, tanpa memulai pekerjaan sumber bersamaan.
+
+Bot menunggu sesuai sisa waktu webhook (maksimal 42 detik). Jika pekerjaan masih pending, bot tidak membuat laporan error permanen; webhook mengembalikan status retry dan update Telegram berikutnya memakai requestId yang sama. Setelah selesai, snapshot serta seluruh pesan disiapkan atomik dan antrean lama melanjutkan pengiriman. Untuk retry yang terlambat, hasil job yang cocok dapat dipakai sampai 24 jam berdasarkan requestedAt/completedAt; payload lama tanpa metadata job tetap dibatasi dua menit. API yang benar-benar gagal memberi pesan spesifik tanpa mengganti snapshot valid sebelumnya.
+
+**Perbaikan HTTP 503 karena timeout:** deploy ulang dashboard dan bot, karena kedua sisi menggunakan protokol pending/result. Tidak ada environment variable tambahan; token integrasi tetap sama. Tabel `unspec_bot_requests` dibuat otomatis saat inisialisasi dashboard.
 
 ## Pengujian
 

@@ -8,7 +8,7 @@ import type { SheetData } from 'read-excel-file/node';
 import { workbookBytes } from './helpers/xlsx.js';
 import type { ReportPreference } from '../src/menu.js';
 import type { OutgoingMessage } from '../src/messages.js';
-import { UnspecApi } from '../src/unspec-api.js';
+import { UnspecApi, UnspecPendingError } from '../src/unspec-api.js';
 import { InputError, parseSnapshot, renderReports, witaDate } from '../src/report.js';
 import { unspecTableMessages } from '../src/unspec-table.js';
 
@@ -272,9 +272,16 @@ test('UNSPEC live text/table print bypasses CSV and stale menu dates; retries re
     assert.ok(table && typeof table !== 'string' && table.type === 'text');
     assert.equal(table.parse_mode, 'HTML');
     assert.ok(table.text.includes('<pre>') && table.text.includes('SALDO'));
+    latest.mock.mockImplementation(async (_timeout, requestId) => { throw new UnspecPendingError(requestId!); });
+    assert.equal(await run(603), 503);
+    assert.equal(jobs.has(603), false, 'pending API requests must not be turned into a permanent error message');
+    const pendingRequestId = latest.mock.calls.at(-1)!.arguments[1];
+    latest.mock.mockImplementation(async () => live);
+    assert.equal(await run(603), 200);
+    assert.equal(latest.mock.calls.at(-1)!.arguments[1], pendingRequestId, 'retry resumes the same web request');
     latest.mock.mockImplementation(async () => { throw new InputError('API sementara gagal.'); });
     assert.equal(await run(601), 200);
-    assert.equal(prepare.mock.callCount(), 2);
+    assert.equal(prepare.mock.callCount(), 3);
     assert.match(String(jobs.get(601)!.messages[0]), /API sementara gagal/);
   } finally {
     for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];

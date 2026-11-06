@@ -1,5 +1,5 @@
 import type { ApiRequest, ApiResponse } from '../src/http.js';
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { getConfig } from '../src/config.js';
 import { InputError, parseSnapshot, resolveCsvReportDate, resolveReportDate, validDate } from '../src/report.js';
 import { database, Store } from '../src/store.js';
@@ -8,7 +8,7 @@ import { parseValinsArguments, parseValinsWorkbook } from '../src/valins.js';
 import { mainMenu, parseMenuAction, valinsKind, type MenuAction } from '../src/menu.js';
 import type { OutgoingMessage } from '../src/messages.js';
 import { prepareReportPhoto } from '../src/report-photo.js';
-import { UnspecApi } from '../src/unspec-api.js';
+import { UnspecApi, UnspecPendingError } from '../src/unspec-api.js';
 
 const HELP = [
   '📖 PANDUAN SINGKAT', '',
@@ -84,14 +84,19 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     const threadId = message.message_thread_id ?? 0;
     const store = new Store(database(config.databaseUrl));
     const telegram = new Telegram(config.token);
-    if (callback) await telegram.answerCallback(callback.id);
+    if (callback) {
+      const fetching = callback.data === 'table:unspec:live' || /^live:unspec:(BONE|KENDARI|MAKASSAR|PARE-PARE|SEMUA)$/.test(callback.data || '');
+      await telegram.answerCallback(callback.id, fetching ? 'Mengambil data UNSPEC. Laporan akan dikirim otomatis setelah data siap.' : undefined);
+    }
     let job = await store.getJob(update.update_id);
     if (!job) {
       try {
         if (callback) {
           const action = parseMenuAction(callback.data ?? '');
           if (action.type === 'live' || (action.type === 'table' && !action.date)) {
-            const live = await new UnspecApi(config).latest(Math.max(1000, Math.min(42000, 45000 - (Date.now() - started))));
+            const namespace = createHash('sha256').update(config.token.split(':')[0]!).digest('hex').slice(0, 12);
+            const requestId = `tg-${namespace}-${update.update_id}`;
+            const live = await new UnspecApi(config).latest(Math.max(1000, Math.min(42000, 45000 - (Date.now() - started))), requestId);
             if (action.type === 'table') await store.prepareLiveUnspec(update.update_id, chatId, userId, threadId, 'SEMUA', live, 'table');
             else await store.prepareLiveUnspec(update.update_id, chatId, userId, threadId, action.scope, live);
           } else await store.prepareMenu(update.update_id, chatId, userId, threadId, action);
@@ -184,6 +189,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     }
     res.status(200).json({ ok: true, ...(permanentFailure ? { delivery_failed: true } : {}) });
   } catch (error) {
+    if (error instanceof UnspecPendingError) {
+      res.setHeader('Retry-After', '3');
+      res.status(503).json({ error: 'Data UNSPEC sedang disiapkan. Pengiriman akan dilanjutkan otomatis.' });
+      return;
+    }
     // Never log raw CSV, customer records, database URLs, or fetch errors containing the bot token.
     console.error('Webhook gagal:', error instanceof TelegramError ? error.message : 'Kesalahan konfigurasi, database, atau pemrosesan.');
     if (error instanceof TelegramError && error.retryAfter) res.setHeader('Retry-After', String(error.retryAfter));
