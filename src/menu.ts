@@ -45,7 +45,7 @@ export function liveUnspecMenu(): RichMessage {
     reply_markup: { inline_keyboard: [
       [button('PARE-PARE'), button('BONE')], [button('KENDARI'), button('MAKASSAR')],
       [button('SEMUA', '🖨 CETAK SEMUA')],
-      [{ text: '📊 CETAK TABEL', callback_data: 'table:unspec:live' }],
+      [{ text: '📊 SULBAGSEL REPORT', callback_data: 'table:unspec:live' }],
       [{ text: '📤 CSV / Arsip', callback_data: 'upload:unspec' }],
       [{ text: '🏠 Menu Utama', callback_data: 'menu:main' }]
     ] }
@@ -64,9 +64,9 @@ export function selectedLiveUnspecMenu(scope: ValinsScope, date: string, fetched
 }
 export function selectedUnspecTableMenu(date: string, live: boolean): RichMessage {
   return {
-    text: `✅ Tabel UNSPEC Sulbagsel sudah dicetak.\n📅 Tanggal data: ${date}\n\n${live ? 'Cetak Ulang Tabel mengambil API terbaru.' : 'Tabel menggunakan snapshot CSV sesuai tanggal pilihan.'}`,
+    text: `✅ SULBAGSEL REPORT sudah dicetak.\n📅 Tanggal data: ${date}\n\n${live ? 'SULBAGSEL REPORT mengambil API terbaru saat ditekan kembali.' : 'Tabel menggunakan snapshot CSV sesuai tanggal pilihan.'}`,
     reply_markup: { inline_keyboard: [
-      [{ text: '📊 Cetak Ulang Tabel', callback_data: `table:unspec:${live ? 'live' : date}` }],
+      [{ text: '📊 SULBAGSEL REPORT', callback_data: `table:unspec:${live ? 'live' : date}` }],
       [{ text: '⬅️ Ganti Branch', callback_data: live ? 'live:unspec:menu' : `branches:unspec:${date}` }],
       [{ text: '🏠 Menu Utama', callback_data: 'menu:main' }]
     ] }
@@ -101,7 +101,7 @@ export function branchMenu(kind: ReportType, date: string, hasPrevious?: boolean
       [button('PARE-PARE'), button('BONE')],
       [button('KENDARI'), button('MAKASSAR')],
       [button('SEMUA', '🖨 CETAK SEMUA')],
-      ...(kind === 'unspec' ? [[{ text: '📊 CETAK TABEL', callback_data: `table:unspec:${date}` }]] : []),
+      ...(kind === 'unspec' ? [[{ text: '📊 SULBAGSEL REPORT', callback_data: `table:unspec:${date}` }]] : []),
       [{ text: '⬅️ Menu Utama', callback_data: 'menu:main' }]
     ] }
   };

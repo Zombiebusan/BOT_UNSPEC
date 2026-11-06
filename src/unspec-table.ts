@@ -46,7 +46,12 @@ export function renderUnspecTableText(snapshot: Snapshot, previous: Snapshot | n
     border('├', '┼', '┤'),
   ];
   cells.forEach((values, index) => {
-    lines.push('│' + values.map((value, column) => column === 0 ? ' ' + value.padEnd(widths[0]!) + ' ' : center(value, sizes[column]!)).join('│') + '│');
+    lines.push('│' + values.map((value, column) => {
+      const cell = column === 0 ? ' ' + value.padEnd(widths[0]!) + ' ' : center(value, sizes[column]!);
+      // Telegram does not support nesting bold entities inside pre/code blocks.
+      // Bold Unicode letters retain one character per table column.
+      return column === 0 && value === 'SULBAGSEL' ? cell.replace(value, '𝗦𝗨𝗟𝗕𝗔𝗚𝗦𝗘𝗟') : cell;
+    }).join('│') + '│');
     lines.push(index === cells.length - 1 ? border('└', '┴', '┘') : border('├', '┼', '┤'));
   });
   return lines.join('\n');

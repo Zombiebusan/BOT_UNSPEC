@@ -14,7 +14,7 @@ const HELP = [
   '📖 PANDUAN SINGKAT', '',
   'MEMBUAT LAPORAN',
   '1. Ketik /start atau /menu.',
-  '2. UNSPEC: pilih branch, Cetak Semua, atau Cetak Tabel; data terbaru diambil dari API.',
+  '2. UNSPEC: pilih branch, Cetak Semua, atau SULBAGSEL REPORT; data terbaru diambil dari API.',
   '3. VALINS: upload Excel sebagai dokumen, lalu pilih branch atau Cetak Semua.', '',
   '📎 FORMAT FILE',
   '• UNSPEC: tidak wajib upload. CSV (.csv) tetap tersedia untuk arsip/koreksi.',

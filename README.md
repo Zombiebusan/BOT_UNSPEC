@@ -23,13 +23,14 @@ Tombol **Cetak Ulang** UNSPEC live mengambil API lagi; **Ganti Branch** membuka 
 
 Setelah deploy versi menu tombol, jalankan **`npm run webhook:set`** agar Telegram mengirim update `callback_query` dari tombol. Database menu dibuat dengan `npm run db:setup` (sudah dijalankan pada database proyek saat fitur dibangun).
 
-## Cetak tabel UNSPEC
+## SULBAGSEL REPORT — tabel UNSPEC
 
-Menu UNSPEC memiliki tombol **📊 CETAK TABEL** tepat di bawah **CETAK SEMUA**. Tombol mengirim satu pesan teks tabel monospace Telegram, dengan garis dan header SALDO bertingkat. Laporan teks lama tetap tersedia melalui pilihan Branch dan CETAK SEMUA.
+Menu UNSPEC memiliki tombol **📊 SULBAGSEL REPORT** tepat di bawah **CETAK SEMUA**. Tombol mengirim satu pesan teks tabel monospace Telegram, dengan garis dan header SALDO bertingkat. Laporan teks lama tetap tersedia melalui pilihan Branch dan CETAK SEMUA.
 
 - Header: **BRANCH**, **SALDO** (H, H-1, TARGET, GAP), **REAL**, **ACH**.
 - Urutan: **MAKASSAR, BONE, PARE PARE, KENDARI, SULBAGSEL**.
-- Jalur API mengambil satu snapshot terbaru beserta H-1. Tombol Cetak Ulang Tabel mengambil API lagi.
+- Jalur API mengambil satu snapshot terbaru beserta H-1. Menekan SULBAGSEL REPORT kembali mengambil API lagi.
+- Label Sulbagsel pada baris total memakai huruf Unicode tebal agar tetap terlihat tebal di blok monospace Telegram tanpa markup bold bersarang.
 - Menu UNSPEC dari unggahan CSV juga memiliki tombol tabel yang memakai arsip pada tanggal upload tersebut.
 - H-1 yang tidak tersedia ditampilkan `—`. Target = floor(LIS / 1000); GAP = max(0, H − target); REAL = H / LIS × 100%; ACH = min(100%, 0,10% / REAL × 100%), dengan ACH saldo nol = 100%.
 - Target dan GAP baris Sulbagsel dihitung dari total regional, bukan penjumlahan pembulatan atau GAP tiap Branch.

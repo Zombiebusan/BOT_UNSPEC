@@ -31,8 +31,9 @@ test('zero balances are valid and missing H-1 stays unavailable', () => {
 
 test('renderer preserves merged headers, aligned table borders and Telegram monospace text', () => {
   const table = renderUnspecTableText(current, previous);
-  for (const label of ['BRANCH', 'SALDO', 'H-1', 'TARGET', 'GAP', 'REAL', 'ACH', 'SULBAGSEL', '100,00%']) assert.ok(table.includes(label));
-  assert.equal(new Set(table.split('\n').map(line => line.length)).size, 1, 'all table lines must have equal width');
+  for (const label of ['BRANCH', 'SALDO', 'H-1', 'TARGET', 'GAP', 'REAL', 'ACH', 'SULBAGSEL', '100,00%']) assert.ok(table.normalize('NFKC').includes(label));
+  assert.ok(table.includes('𝗦𝗨𝗟𝗕𝗔𝗚𝗦𝗘𝗟'));
+  assert.equal(new Set(table.split('\n').map(line => Array.from(line).length)).size, 1, 'all table lines must have equal visible character counts');
   const message = unspecTableMessage(current, previous, '2026-11-05');
   assert.equal(message.type, 'text');
   assert.equal(message.parse_mode, 'HTML');
@@ -45,7 +46,7 @@ test('renderer preserves merged headers, aligned table borders and Telegram mono
 test('large balances expand columns without breaking alignment or Telegram length limit', () => {
   const large = snapshot({ ANT: 100000 });
   const table = renderUnspecTableText(large, large);
-  assert.equal(new Set(table.split('\n').map(line => line.length)).size, 1);
+  assert.equal(new Set(table.split('\n').map(line => Array.from(line).length)).size, 1);
   assert.ok(table.includes('100.000'));
   assert.ok(unspecTableMessage(large, large, '2026-11-05').text.length < 4096);
 });
@@ -54,6 +55,7 @@ test('table button is immediately below print-all for UNSPEC only, with live and
   const live = liveUnspecMenu().reply_markup!.inline_keyboard;
   const all = live.findIndex(row => row.some(button => button.callback_data === 'live:unspec:SEMUA'));
   assert.equal(live[all + 1]![0]!.callback_data, 'table:unspec:live');
+  assert.equal(live[all + 1]![0]!.text, '📊 SULBAGSEL REPORT');
   assert.deepEqual(parseMenuAction('table:unspec:live'), { type: 'table', kind: 'unspec' });
   assert.deepEqual(parseMenuAction('table:unspec:2026-11-05'), { type: 'table', kind: 'unspec', date: '2026-11-05' });
   assert.throws(() => parseMenuAction('table:valins_all:2026-11-05'));

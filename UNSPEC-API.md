@@ -8,7 +8,7 @@
 - VALINS ODP, VALINS DC, parsing Excel, dan fitur balas laporan dengan foto tetap menggunakan alur sebelumnya.
 - Judul, isi, urutan Branch, rumus, pembulatan, daftar STO, serta legenda laporan UNSPEC tidak diubah.
 - Cetak Ulang pada menu live mengambil API terbaru. Tombol cetak dari CSV tetap mencetak snapshot CSV sesuai tanggalnya.
-- **CETAK TABEL** berada tepat di bawah CETAK SEMUA. Pilihan ini mengambil API sekali, kemudian mengirim teks monospace dengan garis tabel, header bertingkat SALDO (H/H-1/TARGET/GAP), REAL, ACH, empat Branch, dan total Sulbagsel. Jalur tabel juga tersedia untuk arsip CSV. Laporan teks sebelumnya tetap ada.
+- **SULBAGSEL REPORT** berada tepat di bawah CETAK SEMUA. Pilihan ini mengambil API sekali, kemudian mengirim teks monospace dengan garis tabel, header bertingkat SALDO (H/H-1/TARGET/GAP), REAL, ACH, empat Branch, dan label total Sulbagsel tebal. Jalur tabel juga tersedia untuk arsip CSV. Laporan teks sebelumnya tetap ada.
 
 ## Konfigurasi dan deployment
 
