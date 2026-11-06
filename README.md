@@ -34,7 +34,8 @@ Menu UNSPEC memiliki tombol **📊 SULBAGSEL REPORT** tepat di bawah **CETAK SEM
 - Menu UNSPEC dari unggahan CSV juga memiliki tombol tabel yang memakai arsip pada tanggal upload tersebut.
 - H-1 yang tidak tersedia ditampilkan `—`. Target = floor(LIS / 1000); GAP = max(0, H − target); REAL = H / LIS × 100%; ACH = min(100%, 0,10% / REAL × 100%), dengan ACH saldo nol = 100%.
 - Target dan GAP baris Sulbagsel dihitung dari total regional, bukan penjumlahan pembulatan atau GAP tiap Branch.
-- CLOSE HI adalah penurunan saldo bersih `max(0, H-1 − H)`: misalnya 18 menjadi 17 menghasilkan 1; jika saldo naik menghasilkan 0. Ini bukan hitungan INCIDENT closed sebenarnya. Acuan mengikuti snapshot H-1 tersimpan, bukan rekonstruksi posisi tepat 00.00 jika data saat itu tidak pernah direkam. Jika H-1 tidak tersedia, CLOSE HI juga `—`.
+- Khusus SULBAGSEL REPORT, **CLOSE HI = saldo pagi pukul 08.00 WITA − saldo saat report diambil**. Ini terpisah dari kolom H-1. Misalnya pagi 18 dan sekarang 17 menghasilkan 1; jika sekarang 19, hasilnya −1. Nilai tidak dibatasi minimum nol dan bukan klaim jumlah INCIDENT yang benar-benar closed.
+- Acuan pagi berasal dari baseline khusus yang disimpan satu kali per tanggal pada dashboard. Waktu perekaman aktual ditampilkan pada report. Jika baseline pagi tidak tersedia, CLOSE HI `—` walaupun H-1 tersedia. Report masih dikirim satu pesan. Arsip API menyimpan metadata baseline; CSV yang tidak memiliki acuan pagi tidak diganti dengan saldo H-1.
 - Seluruh report dikirim dalam **satu pesan**, maksimal 4.096 karakter. Garis horizontal dipadatkan ke header dan subtotal Branch; seluruh baris SA dan total Sulbagsel tetap ada. Spasi dipadatkan lagi bila angkanya panjang. Tombol menu/cetak ulang ditempel pada pesan report yang sama, tanpa pesan konfirmasi terpisah.
 - Teks tabel disiapkan dan disimpan dalam job pengiriman; retry tidak mengganti angka pada laporan yang sudah disiapkan.
 
@@ -96,6 +97,8 @@ Buat file `.env` dengan menyalin isi `.env.example`, lalu isi nilainya:
 | `UNSPEC_API_TOKEN` | Token yang sama dengan `UNSPEC_BOT_API_TOKEN` pada proyek dashboard |
 
 Tidak perlu mengisi ID pengguna atau ID chat. Setiap pengguna dapat mengirim CSV ke bot; semua anggota di grup yang sama menggunakan riwayat snapshot grup tersebut.
+
+Untuk acuan CLOSE HI pukul 08.00, deploy dashboard terbaru dengan `CRON_SECRET` dan cron `0 0 * * *` (UTC = 08.00 WITA), kemudian deploy bot. Rincian waktu dan baseline yang belum tersedia ada di [UNSPEC-API.md](UNSPEC-API.md).
 
 Contoh membuat webhook secret:
 

@@ -9,6 +9,7 @@ import { UNSPEC_SERVICE_AREAS } from '../src/unspec-service-areas.js';
 const snapshot = (values: Record<string, number>) => snapshotFromWorkzoneCounts(Object.fromEntries(Object.keys(MASTER).map(code => [code, values[code] || 0])), '2026-11-05');
 const current = snapshot({ ANT: 150, BTN: 23, KDR: 97, PRE: 117 });
 const previous = snapshot({ ANT: 167, BTN: 23, KDR: 101, PRE: 120 });
+const morning = snapshot({ ANT: 151, BTN: 24, KDR: 98, PRE: 118 });
 
 test('table follows reference row order, balances, regional rounding and capped achieved', () => {
   const rows = buildUnspecTableRows(current, previous);
@@ -37,7 +38,7 @@ test('all 50 STOs belong to exactly one Service Area in the supplied order', () 
   assert.equal(new Set(codes).size, 50);
   assert.deepEqual([...codes].sort(), Object.keys(MASTER).sort());
   assert.ok(UNSPEC_SERVICE_AREAS.every(area => area.stos.every(code => MASTER[code]!.branch === area.branch)));
-  const rows = buildUnspecServiceAreaRows(current, previous);
+  const rows = buildUnspecServiceAreaRows(current, previous, '2026-11-05', morning);
   assert.equal(rows.length, 26);
   assert.deepEqual(rows.filter(row => row.level === 'sa').map(row => row.serviceArea), UNSPEC_SERVICE_AREAS.map(area => area.label));
   assert.deepEqual(rows.filter(row => row.level === 'branch').map(row => row.branch), ['MAKASSAR', 'BONE', 'PARE PARE', 'KENDARI']);
@@ -48,12 +49,24 @@ test('all 50 STOs belong to exactly one Service Area in the supplied order', () 
   assert.equal(rows[9]!.serviceArea, 'SA WAJO');
   assert.equal(rows[10]!.branch, 'BONE');
   const area = rows.find(row => row.serviceArea === 'SA TAMALANREA')!;
-  assert.deepEqual([area.h, area.previous, area.target, area.gap, area.closeHi], [150, 167, 20, 130, 17]);
+  assert.deepEqual([area.h, area.previous, area.target, area.gap, area.closeHi], [150, 167, 20, 130, 1]);
   const regional = rows.at(-1)!;
-  assert.deepEqual([regional.h, regional.previous, regional.target, regional.gap, regional.closeHi], [387, 411, 395, 0, 24]);
-  const increase = buildUnspecServiceAreaRows(snapshot({ ANT: 200, BTN: 23, KDR: 97, PRE: 117 }), previous);
-  assert.equal(increase.find(row => row.serviceArea === 'SA TAMALANREA')!.closeHi, 0);
-  assert.equal(increase.at(-1)!.closeHi, 0, 'regional CLOSE HI is the net regional reduction, not a claim of incident closures');
+  assert.deepEqual([regional.h, regional.previous, regional.target, regional.gap, regional.closeHi], [387, 411, 395, 0, 4]);
+  const increase = buildUnspecServiceAreaRows(snapshot({ ANT: 200, BTN: 23, KDR: 97, PRE: 117 }), previous, '2026-11-05', morning);
+  assert.equal(increase.find(row => row.serviceArea === 'SA TAMALANREA')!.closeHi, -49);
+  assert.equal(increase.at(-1)!.closeHi, -46, 'regional CLOSE HI follows the signed morning minus current formula');
+});
+
+test('CLOSE HI uses morning 08:00, never falls back to H-1, and can work without H-1', () => {
+  assert.ok(buildUnspecServiceAreaRows(current, previous).every(row => row.closeHi === null));
+  const noYesterday = buildUnspecServiceAreaRows(current, null, '2026-11-05', morning);
+  assert.equal(noYesterday.find(row => row.serviceArea === 'SA TAMALANREA')!.closeHi, 1);
+  assert.ok(noYesterday.every(row => row.previous === null));
+  const messages = unspecTableMessages(current, previous, '2026-11-05', { snapshot: morning, capturedAt: '2026-11-05T00:01:00Z' });
+  assert.equal(messages.length, 1);assert.ok(messages[0]!.text.length <= 4096);
+  assert.match(messages[0]!.text, /Acuan 08.00: terekam/);
+  assert.match(unspecTableMessages(current, previous, '2026-11-05')[0]!.text, /Acuan 08.00 WITA belum tersedia/);
+  assert.throws(() => unspecTableMessages(current, previous, '2026-11-05', { snapshot: morning, capturedAt: '2026-11-04T00:01:00Z' }));
 });
 
 test('renderer preserves merged headers, aligned table borders and Telegram monospace text', () => {
@@ -96,9 +109,10 @@ test('large balances expand columns without breaking alignment or Telegram lengt
   const table = renderUnspecTableText(large, large);
   assert.equal(new Set(table.split('\n').map(line => Array.from(line).length)).size, 1);
   assert.ok(table.includes('100.000'));
-  const messages = unspecTableMessages(large, large, '2026-11-05');
+  const messages = unspecTableMessages(large, large, '2026-11-05', { snapshot: snapshot({}), capturedAt: '2026-11-05T00:01:00Z' });
   assert.equal(messages.length, 1);
   assert.ok(messages[0]!.text.length <= 4096);
+  assert.ok(messages[0]!.text.includes('-100.000'));
   for (const area of UNSPEC_SERVICE_AREAS) assert.ok(messages[0]!.text.includes(area.label));
 });
 

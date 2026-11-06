@@ -6,6 +6,9 @@ import type { OutgoingMessage } from './messages.js';
 import { branchMenu, liveUnspecMenu, mainMenu, selectedLiveUnspecMenu, selectedUnspecTableMenu, selectedMenu, uploadPrompt, valinsKind, type MenuAction, type ReportPreference, type UploadMenuContext } from './menu.js';
 import type { LiveUnspecReport } from './unspec-api.js';
 import { unspecTableMessages } from './unspec-table.js';
+import type { ReportMorningBaseline } from './morning-baseline.js';
+
+interface StoredUnspecSnapshot extends Snapshot { reportMorning?: ReportMorningBaseline }
 
 let client: ReturnType<typeof postgres> | undefined;
 export function database(url: string): ReturnType<typeof postgres> {
@@ -104,8 +107,9 @@ export class Store {
       const old = await tx<{ snapshot: Snapshot }[]>`SELECT snapshot FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${previousDate(live.date)}::date`;
       const previous = live.previous ?? old[0]?.snapshot ?? null;
       const reports = renderReports(live.snapshot, previous, live.timestamp, live.date);
+      const stored: StoredUnspecSnapshot = live.morning ? { ...live.snapshot, reportMorning: live.morning } : live.snapshot;
       const changed = await tx`INSERT INTO daily_snapshots (chat_id, report_date, source_time, source_order, snapshot, reports)
-        VALUES (${chatId}, ${live.date}::date, ${live.timestamp}, ${updateId}, ${tx.json(live.snapshot as unknown as postgres.JSONValue)}, ${tx.json(reports)})
+        VALUES (${chatId}, ${live.date}::date, ${live.timestamp}, ${updateId}, ${tx.json(stored as unknown as postgres.JSONValue)}, ${tx.json(reports)})
         ON CONFLICT (chat_id, report_date) DO UPDATE SET source_time = EXCLUDED.source_time, source_order = EXCLUDED.source_order,
           uploaded_at = NOW(), snapshot = EXCLUDED.snapshot, reports = EXCLUDED.reports
         WHERE (daily_snapshots.source_time, daily_snapshots.source_order) < (EXCLUDED.source_time, EXCLUDED.source_order)
@@ -118,7 +122,7 @@ export class Store {
         VALUES (${chatId}, ${userId}, ${threadId}, 'unspec', ${scope}, ${live.date}::date)
         ON CONFLICT (chat_id, user_id, thread_id) DO UPDATE SET report_type = EXCLUDED.report_type, scope = EXCLUDED.scope, upload_date = EXCLUDED.upload_date, updated_at = NOW()`;
       const messages = format === 'table'
-        ? unspecTableMessages(live.snapshot, previous, live.date).map(message => ({ ...message, reply_markup: selectedUnspecTableMenu(live.date, true).reply_markup }))
+        ? unspecTableMessages(live.snapshot, previous, live.date, live.morning ?? null).map(message => ({ ...message, reply_markup: selectedUnspecTableMenu(live.date, true).reply_markup }))
         : [...selectUnspecReports(reports, scope), selectedLiveUnspecMenu(scope, live.date, live.fetchedAt, previous !== null)];
       await tx`INSERT INTO telegram_jobs (update_id, chat_id, messages) VALUES (${updateId}, ${chatId}, ${tx.json(messages as unknown as postgres.JSONValue)})`;
     });
@@ -205,11 +209,11 @@ export class Store {
           const old = action.kind === 'unspec' ? await tx`SELECT 1 FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${previousDate(date)}::date` : [];
           messages = [branchMenu(action.kind, date, Boolean(old.length))];
         } else if (action.type === 'table') {
-          const rows = await tx<{ snapshot: Snapshot }[]>`SELECT snapshot FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${date}::date`;
+          const rows = await tx<{ snapshot: StoredUnspecSnapshot }[]>`SELECT snapshot FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${date}::date`;
           if (!rows[0]) throw new InputError('Data upload tidak ditemukan. Silakan upload ulang file Anda.');
           const old = await tx<{ snapshot: Snapshot }[]>`SELECT snapshot FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${previousDate(date)}::date`;
           await tx`UPDATE report_preferences SET scope = 'SEMUA', updated_at = NOW() WHERE chat_id = ${chatId} AND user_id = ${userId} AND thread_id = ${threadId}`;
-          messages = unspecTableMessages(rows[0].snapshot, old[0]?.snapshot ?? null, date).map(message => ({ ...message, reply_markup: selectedUnspecTableMenu(date, false).reply_markup }));
+          messages = unspecTableMessages(rows[0].snapshot, old[0]?.snapshot ?? null, date, rows[0].snapshot.reportMorning ?? null).map(message => ({ ...message, reply_markup: selectedUnspecTableMenu(date, false).reply_markup }));
         } else {
           let reports: string[] = [];
           if (action.kind === 'unspec') {

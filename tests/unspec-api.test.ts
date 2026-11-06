@@ -116,3 +116,17 @@ test('specific API failures are actionable without echoing arbitrary remote text
   await assert.rejects(new UnspecApi({ unspecApiUrl: 'https://example.test/api/bot/unspec', unspecApiToken: 'test-token' }).latest(),
     error => error instanceof InputError && /MONICA terlalu lama/.test(error.message) && !error.message.includes('arbitrary'));
 });
+
+test('08:00 baseline is parsed separately and rejects late, future, or wrong-day captures', () => {
+  const now = Date.parse('2026-11-05T06:00:00Z');
+  const morning = { date: '2026-11-05', scheduledTime: '08:00', timeZone: 'Asia/Makassar', capturedAt: '2026-11-05T00:01:00Z', total: 3, countsByWorkzone: counts(3) };
+  const parsed = parseLiveUnspec({ ...payload(now), morning }, now);
+  assert.equal(parsed.morning!.snapshot.totalRows, 3);
+  assert.equal(parsed.snapshot.totalRows, 2);assert.equal(parsed.previous!.totalRows, 3);
+  assert.equal(parseLiveUnspec(payload(now), now).morning, null);
+  for (const patch of [ { date: '2026-11-04' }, { capturedAt: '2026-11-05T03:00:00Z' }, { capturedAt: '2026-11-05T00:05:00Z' }, { timeZone: 'UTC' } ]) {
+    assert.throws(() => parseLiveUnspec({ ...payload(now), morning: { ...morning, ...patch } }, now), InputError);
+  }
+  const before = Date.parse('2026-11-04T23:59:00Z');
+  assert.throws(() => parseLiveUnspec({ ...payload(before), morning }, before), InputError);
+});

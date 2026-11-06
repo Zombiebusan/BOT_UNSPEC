@@ -1,5 +1,6 @@
 import type { Config } from './config.js';
 import { InputError, previousDate, snapshotFromWorkzoneCounts, validDate, witaDate, type Snapshot } from './report.js';
+import { isMorningBaselineTime, type ReportMorningBaseline } from './morning-baseline.js';
 
 export interface LiveUnspecReport {
   date: string;
@@ -7,6 +8,7 @@ export interface LiveUnspecReport {
   timestamp: number;
   snapshot: Snapshot;
   previous: Snapshot | null;
+  morning?: ReportMorningBaseline | null;
 }
 export class UnspecPendingError extends Error {
   constructor(readonly requestId: string) { super('Data UNSPEC sedang disiapkan. Pengiriman dilanjutkan otomatis.'); }
@@ -37,7 +39,14 @@ export function parseLiveUnspec(value: unknown, now = Date.now(), expectedReques
     if (!record(value.previous) || value.previous.date !== previousDate(value.date)) throw new InputError('Tanggal H-1 API harus tepat sehari sebelum tanggal laporan.');
     previous = build(value.previous, value.previous.date as string);
   }
-  return { date: value.date, fetchedAt: value.fetchedAt, timestamp: Math.floor(time / 1000), snapshot, previous };
+  let morning: ReportMorningBaseline | null = null;
+  if (value.morning !== undefined && value.morning !== null) {
+    const part = value.morning;
+    if (!record(part) || part.date !== value.date || part.scheduledTime !== '08:00' || part.timeZone !== 'Asia/Makassar'
+      || typeof part.capturedAt !== 'string' || !isMorningBaselineTime(part.capturedAt, value.date) || Date.parse(part.capturedAt) > time) throw new InputError('Acuan saldo 08.00 WITA dari API tidak valid.');
+    morning = { snapshot: build(part, value.date), capturedAt: part.capturedAt };
+  }
+  return { date: value.date, fetchedAt: value.fetchedAt, timestamp: Math.floor(time / 1000), snapshot, previous, morning };
 }
 
 export class UnspecApi {

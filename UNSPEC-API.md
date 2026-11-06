@@ -8,7 +8,17 @@
 - VALINS ODP, VALINS DC, parsing Excel, dan fitur balas laporan dengan foto tetap menggunakan alur sebelumnya.
 - Judul, isi, urutan Branch, rumus, pembulatan, daftar STO, serta legenda laporan UNSPEC tidak diubah.
 - Cetak Ulang pada menu live mengambil API terbaru. Tombol cetak dari CSV tetap mencetak snapshot CSV sesuai tanggalnya.
-- **SULBAGSEL REPORT** berada tepat di bawah CETAK SEMUA. Pilihan ini mengambil API sekali, kemudian mengirim satu pesan tabel teks per 21 Service Area dalam empat Branch: BRANCH/SA (satu kolom untuk nama SA dan subtotal Branch), SALDO (H/H-1/TARGET/GAP), CLOSE HI, REAL, ACH, dan baris total SULBAGSEL dengan font monospace yang seragam. Pemisah baris dan spasi dipadatkan agar seluruh data muat 4.096 karakter; tombol menu/cetak ulang berada pada pesan yang sama. CLOSE HI memakai penurunan saldo bersih dari snapshot H-1 (`max(0,H-1−H)`), bukan klaim jumlah tiket closed atau posisi tepat 00.00 yang tidak terekam. Jalur tabel juga tersedia untuk arsip CSV. Laporan teks sebelumnya tetap ada.
+- **SULBAGSEL REPORT** berada tepat di bawah CETAK SEMUA. Pilihan ini mengambil API sekali, kemudian mengirim satu pesan tabel teks per 21 Service Area dalam empat Branch: BRANCH/SA (satu kolom untuk nama SA dan subtotal Branch), SALDO (H/H-1/TARGET/GAP), CLOSE HI, REAL, ACH, dan baris total SULBAGSEL dengan font monospace yang seragam. Pemisah baris dan spasi dipadatkan agar seluruh data muat 4.096 karakter; tombol menu/cetak ulang berada pada pesan yang sama. Khusus CLOSE HI, rumusnya **saldo pagi 08.00 WITA − saldo terkini**, terpisah dari H-1 dan tanpa clamp nol. Jalur tabel juga tersedia untuk arsip CSV. Laporan teks sebelumnya tetap ada.
+
+## Baseline CLOSE HI pukul 08.00 WITA
+
+- Dashboard memiliki tabel `unspec_morning_baselines` yang dibuat otomatis. Snapshot pagi pertama yang berhasil dalam rentang **08.00 sampai sebelum 08.05 WITA** disimpan secara immutable (`ON CONFLICT DO NOTHING`), beserta waktu pengambilan aktual. Sinkronisasi berikutnya tidak mengubah baseline.
+- `vercel.json` dashboard menjadwalkan `GET /api/cron/morning` pada **`0 0 * * *` UTC**, yaitu 08.00 WITA. Isi `CRON_SECRET` Production pada proyek dashboard, dari `.env.local`, agar Vercel mengirim bearer secret yang sesuai. Cron menjalankan persiapan data persisten yang sama dengan API bot dan mendukung sumber lambat.
+- Batas lima menit mencegah saldo jam siang dianggap sebagai saldo 08.00. Karena pengambilan sumber tidak instan, report menampilkan jam capture aktual, misalnya `Acuan 08.00: terekam 08.01.20 WITA`.
+- Vercel Hobby dapat menjalankan cron harian pada waktu yang tidak presisi dalam jam jadwalnya. Jika pemanggilan melewati 08.05, aplikasi tidak membuat baseline palsu dan CLOSE HI tetap `—`. Gunakan penjadwal dengan presisi menit (paket yang mendukungnya atau scheduler eksternal dengan bearer CRON_SECRET) bila acuan 08.00 wajib tersedia setiap hari.
+- Sebelum pukul 08.00, pada hari cron/API gagal, atau untuk tanggal lama yang tidak memiliki rekaman pagi, CLOSE HI `—`, bukan nol dan bukan H-1. Tidak ada backfill dari snapshot siang.
+- API menambahkan `morning: null` atau `{date, scheduledTime:"08:00", timeZone:"Asia/Makassar", capturedAt, countsByWorkzone, total}`. Baseline harus tanggal yang sama dan tidak boleh sesudah snapshot report. Format lama tanpa field `morning` tetap dapat dibaca, tetapi CLOSE HI tidak dihitung dari H-1.
+- Pada bot, baseline API disimpan bersama snapshot arsip tanpa mengubah format laporan teks Branch/VALINS. Untuk tabel API yang diarsipkan, metadata pagi tersebut tetap dipakai ketika tersedia.
 
 ## Konfigurasi dan deployment
 

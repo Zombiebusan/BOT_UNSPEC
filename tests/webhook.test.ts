@@ -8,7 +8,7 @@ import type { SheetData } from 'read-excel-file/node';
 import { workbookBytes } from './helpers/xlsx.js';
 import type { ReportPreference } from '../src/menu.js';
 import type { OutgoingMessage } from '../src/messages.js';
-import { UnspecApi, UnspecPendingError } from '../src/unspec-api.js';
+import { UnspecApi, UnspecPendingError, type LiveUnspecReport } from '../src/unspec-api.js';
 import { InputError, parseSnapshot, renderReports, witaDate } from '../src/report.js';
 import { unspecTableMessages } from '../src/unspec-table.js';
 
@@ -241,8 +241,8 @@ test('UNSPEC live text/table print bypasses CSV and stale menu dates; retries re
   const csv = t.mock.method(Telegram.prototype, 'downloadCsv', async () => { throw new Error('CSV must not be downloaded'); });
   const valins = t.mock.method(Store.prototype, 'prepareValinsUpload', async () => { throw new Error('VALINS must not change'); });
   t.mock.method(Telegram.prototype, 'answerCallback', async () => {});
-  const prepare = t.mock.method(Store.prototype, 'prepareLiveUnspec', async (id: number, chat: string, _user: string, _thread: number, _scope: unknown, input: typeof live, format?: 'text' | 'table') => {
-    const messages = format === 'table' ? unspecTableMessages(input.snapshot, input.previous, input.date) : renderReports(input.snapshot, input.previous, input.timestamp, input.date);
+  const prepare = t.mock.method(Store.prototype, 'prepareLiveUnspec', async (id: number, chat: string, _user: string, _thread: number, _scope: unknown, input: LiveUnspecReport, format?: 'text' | 'table') => {
+    const messages = format === 'table' ? unspecTableMessages(input.snapshot, input.previous, input.date, input.morning ?? null) : renderReports(input.snapshot, input.previous, input.timestamp, input.date);
     jobs.set(id, { update_id: String(id), chat_id: chat, messages, delivered: messages.length });
   });
   t.mock.method(Store.prototype, 'prepareMessages', async (id: number, chat: string, messages: OutgoingMessage[]) => { jobs.set(id, { update_id: String(id), chat_id: chat, messages, delivered: messages.length }); });
