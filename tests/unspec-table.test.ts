@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MASTER } from '../src/master.js';
 import { snapshotFromWorkzoneCounts } from '../src/report.js';
-import { buildUnspecTableRows, renderUnspecTableText, unspecTableMessage } from '../src/unspec-table.js';
+import { buildUnspecTableRows, buildUnspecServiceAreaRows, renderUnspecTableText, unspecTableMessages } from '../src/unspec-table.js';
 import { branchMenu, liveUnspecMenu, parseMenuAction, selectedUnspecTableMenu } from '../src/menu.js';
+import { UNSPEC_SERVICE_AREAS } from '../src/unspec-service-areas.js';
 
 const snapshot = (values: Record<string, number>) => snapshotFromWorkzoneCounts(Object.fromEntries(Object.keys(MASTER).map(code => [code, values[code] || 0])), '2026-11-05');
 const current = snapshot({ ANT: 150, BTN: 23, KDR: 97, PRE: 117 });
@@ -27,20 +28,50 @@ test('zero balances are valid and missing H-1 stays unavailable', () => {
   const rows = buildUnspecTableRows(empty, null);
   assert.ok(rows.every(row => row.h === 0 && row.previous === null && row.real === 0 && row.achieved === 100));
   assert.ok(renderUnspecTableText(empty, null).includes('—'));
+  assert.ok(buildUnspecServiceAreaRows(empty, null).every(row => row.previous === null && row.closeHi === null));
+});
+
+test('all 50 STOs belong to exactly one Service Area in the supplied order', () => {
+  const codes = UNSPEC_SERVICE_AREAS.flatMap(area => [...area.stos]);
+  assert.equal(codes.length, 50);
+  assert.equal(new Set(codes).size, 50);
+  assert.deepEqual([...codes].sort(), Object.keys(MASTER).sort());
+  assert.ok(UNSPEC_SERVICE_AREAS.every(area => area.stos.every(code => MASTER[code]!.branch === area.branch)));
+  const rows = buildUnspecServiceAreaRows(current, previous);
+  assert.equal(rows.length, 26);
+  assert.deepEqual(rows.filter(row => row.level === 'sa').map(row => row.serviceArea), UNSPEC_SERVICE_AREAS.map(area => area.label));
+  assert.deepEqual(rows.filter(row => row.level === 'branch').map(row => row.branch), ['MAKASSAR', 'BONE', 'PARE PARE', 'KENDARI']);
+  assert.deepEqual(rows.filter(row => row.level === 'branch').map(row => row.h), [150, 23, 117, 97]);
+  assert.equal(rows[5]!.serviceArea, 'SA MAROS');
+  assert.equal(rows[6]!.level, 'branch');
+  assert.equal(rows[6]!.branch, 'MAKASSAR');
+  assert.equal(rows[9]!.serviceArea, 'SA WAJO');
+  assert.equal(rows[10]!.branch, 'BONE');
+  const area = rows.find(row => row.serviceArea === 'SA TAMALANREA')!;
+  assert.deepEqual([area.h, area.previous, area.target, area.gap, area.closeHi], [150, 167, 20, 130, 17]);
+  const regional = rows.at(-1)!;
+  assert.deepEqual([regional.h, regional.previous, regional.target, regional.gap, regional.closeHi], [387, 411, 395, 0, 24]);
+  const increase = buildUnspecServiceAreaRows(snapshot({ ANT: 200, BTN: 23, KDR: 97, PRE: 117 }), previous);
+  assert.equal(increase.find(row => row.serviceArea === 'SA TAMALANREA')!.closeHi, 0);
+  assert.equal(increase.at(-1)!.closeHi, 0, 'regional CLOSE HI is the net regional reduction, not a claim of incident closures');
 });
 
 test('renderer preserves merged headers, aligned table borders and Telegram monospace text', () => {
   const table = renderUnspecTableText(current, previous);
-  for (const label of ['BRANCH', 'SALDO', 'H-1', 'TARGET', 'GAP', 'REAL', 'ACH', 'SULBAGSEL', '100,00%']) assert.ok(table.normalize('NFKC').includes(label));
+  for (const label of ['BRANCH', 'SERVICE AREA', 'SALDO', 'H-1', 'TARGET', 'GAP', 'CLOSE HI', 'REAL', 'ACH', 'SULBAGSEL', '100,00%']) assert.ok(table.normalize('NFKC').includes(label));
   assert.ok(table.includes('𝗦𝗨𝗟𝗕𝗔𝗚𝗦𝗘𝗟'));
   assert.equal(new Set(table.split('\n').map(line => Array.from(line).length)).size, 1, 'all table lines must have equal visible character counts');
-  const message = unspecTableMessage(current, previous, '2026-11-05');
-  assert.equal(message.type, 'text');
-  assert.equal(message.parse_mode, 'HTML');
-  assert.ok(message.text.includes('<pre>'+table+'</pre>'));
-  assert.ok(message.text.length < 4096);
-  assert.match(message.text, /H-1: 2026-11-04/);
-  assert.ok(!('upload' in message));
+  const messages = unspecTableMessages(current, previous, '2026-11-05');
+  assert.ok(messages.length > 1);
+  for (const message of messages) {
+    assert.equal(message.type, 'text');assert.equal(message.parse_mode, 'HTML');
+    assert.ok(message.text.includes('<pre>'));assert.ok(message.text.length <= 4096);
+    assert.match(message.text, /H-1: 2026-11-04/);assert.ok(!('upload' in message));
+    assert.equal(new Set(message.text.match(/<pre>([\s\S]*)<\/pre>/)![1]!.split('\n').map(line => Array.from(line).length)).size, 1);
+  }
+  const combined = messages.map(message => message.text).join('\n');
+  for (const area of UNSPEC_SERVICE_AREAS) assert.equal(combined.split(area.label).length - 1, 1, 'every SA must appear once across pages');
+  assert.equal(combined.split('𝗦𝗨𝗟𝗕𝗔𝗚𝗦𝗘𝗟').length - 1, 1);
 });
 
 test('large balances expand columns without breaking alignment or Telegram length limit', () => {
@@ -48,7 +79,7 @@ test('large balances expand columns without breaking alignment or Telegram lengt
   const table = renderUnspecTableText(large, large);
   assert.equal(new Set(table.split('\n').map(line => Array.from(line).length)).size, 1);
   assert.ok(table.includes('100.000'));
-  assert.ok(unspecTableMessage(large, large, '2026-11-05').text.length < 4096);
+  assert.ok(unspecTableMessages(large, large, '2026-11-05').every(message => message.text.length <= 4096));
 });
 
 test('table button is immediately below print-all for UNSPEC only, with live and archive callbacks', () => {

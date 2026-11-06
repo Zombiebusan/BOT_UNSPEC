@@ -7,4 +7,4 @@ if (!currentFile) throw new Error('Gunakan: npm run unspec:table:preview -- CSV_
 const date = requestedDate || resolveCsvReportDate(undefined, Date.now() / 1000);
 const current = parseSnapshot(await readFile(currentFile, 'utf8'), date);
 const previous = previousFile && previousFile !== '-' ? parseSnapshot(await readFile(previousFile, 'utf8'), previousDate(date)) : null;
-console.log(`REKAP UNSPEC SULBAGSEL — ${date}\n${renderUnspecTableText(current, previous)}\nTidak ada pesan Telegram yang dikirim.`);
+console.log(`REKAP UNSPEC SULBAGSEL — ${date}\n${renderUnspecTableText(current, previous, date)}\nTidak ada pesan Telegram yang dikirim.`);
