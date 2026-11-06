@@ -1,0 +1,10 @@
+node_modules
+dist
+.git
+.env
+.env.*
+*.csv
+*.xlsx
+unspec-riwayat*.json
+UNSPEC-*.html
+tests

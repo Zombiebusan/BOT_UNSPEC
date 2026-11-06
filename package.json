@@ -1,0 +1,30 @@
+{
+  "name": "kkp-unspec-telegram-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "24.x" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "tsx --test tests/*.test.ts",
+    "db:setup": "tsx scripts/setup-db.ts",
+    "db:check": "tsx scripts/check-storage.ts",
+    "connections:check": "tsx scripts/check-connections.ts",
+    "queue:recover": "tsx scripts/recover-queue.ts",
+    "webhook:set": "tsx scripts/set-webhook.ts",
+    "report:preview": "tsx scripts/preview.ts",
+    "valins:preview": "tsx scripts/preview-valins.ts"
+  },
+  "dependencies": {
+    "csv-parse": "^7.0.3",
+    "dotenv": "^17.2.3",
+    "postgres": "^3.4.7",
+    "read-excel-file": "^9.3.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "fflate": "^0.8.3",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
