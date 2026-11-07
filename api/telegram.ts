@@ -9,13 +9,16 @@ import { mainMenu, parseMenuAction, valinsKind, type MenuAction } from '../src/m
 import type { OutgoingMessage } from '../src/messages.js';
 import { prepareReportPhoto } from '../src/report-photo.js';
 import { UnspecApi, UnspecPendingError } from '../src/unspec-api.js';
+import { parseBotCommand, reportDocumentKind } from '../src/message-policy.js';
 
 const HELP = [
   '📖 PANDUAN SINGKAT', '',
   'MEMBUAT LAPORAN',
   '1. Ketik /start atau /menu.',
   '2. UNSPEC: pilih branch, Cetak Semua, atau SULBAGSEL REPORT; data terbaru diambil dari API.',
-  '3. VALINS: upload Excel sebagai dokumen, lalu pilih branch atau Cetak Semua.', '',
+   '3. VALINS: pilih jenis VALINS, upload Excel sebagai dokumen, lalu pilih branch atau Cetak Semua.',
+   '4. Upload CSV: pilih CSV / Arsip. Untuk file berikutnya, tekan Upload File Baru.',
+   'Bot menunggu satu file yang sesuai selama 15 menit, dari pengguna dan chat/topic yang sama.', '',
   '📎 FORMAT FILE',
   '• UNSPEC: tidak wajib upload. CSV (.csv) tetap tersedia untuk arsip/koreksi.',
   '• VALINS ODP / DC: Excel (.xlsx), data di Sheet1.',
@@ -83,17 +86,39 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     const chatId = String(message.chat.id);
     const userId = String(actor.id);
     const threadId = message.message_thread_id ?? 0;
-    const store = new Store(database(config.databaseUrl));
     const telegram = new Telegram(config.token);
+    let callbackAction: MenuAction | null = null;
+    let photoReport: OutgoingMessage[] | null = null;
+    const commandInput = !callback && !message.photo?.length && !message.document ? parseBotCommand(message.text) : null;
+    const documentKind = message.document ? reportDocumentKind(message.document.file_name) : null;
+    if (callback) {
+      try { callbackAction = parseMenuAction(callback.data ?? ''); }
+      catch (error) { if (!(error instanceof InputError)) throw error;res.status(200).json({ ok: true });return; }
+    } else if (message.photo?.length) {
+      try { photoReport = prepareReportPhoto(message, config.token.split(':')[0]!); }
+      catch (error) { if (!(error instanceof InputError)) throw error;res.status(200).json({ ok: true });return; }
+    } else if (message.document) {
+      if (!documentKind) { res.status(200).json({ ok: true });return; }
+    } else if (!commandInput) {
+      res.status(200).json({ ok: true });return;
+    }
+    if (commandInput?.target && commandInput.target !== await telegram.getUsername()) { res.status(200).json({ ok: true });return; }
+    const store = new Store(database(config.databaseUrl));
     if (callback) {
       const fetching = callback.data === 'table:unspec:live' || /^live:unspec:(BONE|KENDARI|MAKASSAR|PARE-PARE|SEMUA)$/.test(callback.data || '');
       await telegram.answerCallback(callback.id, fetching ? 'Mengambil data UNSPEC. Laporan akan dikirim otomatis setelah data siap.' : undefined);
     }
     let job = await store.getJob(update.update_id);
+    let uploadKind: Awaited<ReturnType<Store['getUploadRequest']>> = null;
+    if (!job && !callback && !photoReport && message.document) {
+      uploadKind = await store.getUploadRequest(chatId, userId, threadId);
+      const matches = uploadKind && (documentKind === 'csv' ? uploadKind === 'unspec' : uploadKind !== 'unspec');
+      if (!matches) { res.status(200).json({ ok: true });return; }
+    }
     if (!job) {
       try {
         if (callback) {
-          const action = parseMenuAction(callback.data ?? '');
+          const action = callbackAction!;
           if (action.type === 'live' || (action.type === 'table' && !action.date)) {
             const namespace = createHash('sha256').update(config.token.split(':')[0]!).digest('hex').slice(0, 12);
             const requestId = `tg-${namespace}-${update.update_id}`;
@@ -102,32 +127,31 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
             else await store.prepareLiveUnspec(update.update_id, chatId, userId, threadId, action.scope, live);
           } else await store.prepareMenu(update.update_id, chatId, userId, threadId, action);
         } else if (message.photo?.length) {
-          const messages = prepareReportPhoto(message, config.token.split(':')[0]!);
-          await store.prepareMessages(update.update_id, chatId, messages);
+          await store.prepareMessages(update.update_id, chatId, photoReport!);
         } else if (message.document) {
-          const preference = await store.getPreference(chatId, userId, threadId);
+          const selectedKind = uploadKind!;
           const filename = message.document.file_name?.toLowerCase() ?? '';
           if (filename.endsWith('.xlsx')) {
             const reportDate = resolveReportDate(message.caption, message.date);
-            if (preference?.kind === 'unspec') throw new InputError('Pilihan Anda UNSPEC. Kirim CSV (.csv), atau gunakan /start untuk memilih VALINS.');
+            if (selectedKind === 'unspec') { res.status(200).json({ ok: true });return; }
             const bytes = await telegram.downloadXlsx(message.document);
             const snapshot = await parseValinsWorkbook(bytes);
-            const kind = preference?.kind ?? 'valins_all';
+            const kind = selectedKind;
             await store.prepareValinsUpload(update.update_id, chatId, message.message_id, message.date, snapshot, reportDate,
               valinsKind(kind), 'PARE-PARE', { kind, userId, threadId });
           } else if (filename.endsWith('.csv')) {
             const reportDate = resolveCsvReportDate(message.caption, message.date);
-            if (preference && preference.kind !== 'unspec') throw new InputError('Pilihan Anda VALINS. Kirim Excel (.xlsx), atau gunakan /start untuk memilih UNSPEC.');
+            if (selectedKind !== 'unspec') { res.status(200).json({ ok: true });return; }
             const csv = await telegram.downloadCsv(message.document);
             const snapshot = parseSnapshot(csv, reportDate);
             await store.prepareUpload(update.update_id, chatId, message.message_id, message.date, snapshot, reportDate,
               'SEMUA', { kind: 'unspec', userId, threadId });
           } else {
-            throw new InputError('Kirim .csv untuk UNSPEC atau .xlsx untuk VALINS.');
+            res.status(200).json({ ok: true });return;
           }
         } else {
-          const [rawCommand, date, ...extra] = (message.text ?? '').trim().split(/\s+/);
-          const command = rawCommand?.split('@')[0]?.toLowerCase();
+          const { command, args } = commandInput!;
+          const [date, ...extra] = args;
           let menu: MenuAction | null = null;
           if (command === '/start' || command === '/menu') menu = { type: 'main' };
           else if (command === '/unspec') menu = { type: 'kind', kind: 'unspec' };
@@ -146,15 +170,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
               if (extra.length || (date && !validDate(date))) throw new InputError('Gunakan /report atau /report YYYY-MM-DD dengan tanggal yang valid.');
               const preference = await store.getPreference(chatId, userId, threadId);
               messages = await store.report(chatId, date ?? preference?.date ?? undefined, preference?.kind === 'unspec' && preference.scope ? preference.scope : 'SEMUA');
-            } else {
+            } else if (command === '/help') {
               messages = [HELP, mainMenu()];
-            }
+            } else { res.status(200).json({ ok: true });return; }
             await store.prepareMessages(update.update_id, chatId, messages);
           }
         }
       } catch (error) {
         if (!(error instanceof InputError)) throw error;
-        await store.prepareMessages(update.update_id, chatId, [`❌ ${error.message}\n\nSnapshot valid sebelumnya tidak diubah.`]);
+        await store.prepareMessages(update.update_id, chatId, [`❌ ${error.message}`]);
       }
       job = await store.getJob(update.update_id);
     }

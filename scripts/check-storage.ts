@@ -92,9 +92,24 @@ try {
     assert.deepEqual(await store.getPreference(chat, 'user-a'), { kind: 'unspec', scope: null, date: null });
     const prompt = (await store.getJob(base - 20))!.messages[0];
     assert.ok(prompt && typeof prompt !== 'string' && prompt.type !== 'photo' && prompt.text.includes('tanpa upload CSV'));
+    assert.equal(await store.getUploadRequest(chat, 'user-a'), null);
+    await store.prepareMenu(base - 90, chat, 'user-a', 0, { type: 'upload', kind: 'unspec' });
+    assert.equal(await store.getUploadRequest(chat, 'user-a'), 'unspec');
+    assert.equal(await store.getUploadRequest(otherChat, 'user-a'), null);
+    assert.equal(await store.getUploadRequest(chat, 'other-user'), null);
+    assert.equal(await store.getUploadRequest(chat, 'user-a', 42), null);
+    await tx`UPDATE report_preferences SET upload_requested_at = now() - interval '16 minutes'
+      WHERE chat_id = ${chat} AND user_id = 'user-a' AND thread_id = 0`;
+    assert.equal(await store.getUploadRequest(chat, 'user-a'), null);
+    // Retrying the original menu update must not renew an expired upload request.
+    await store.prepareMenu(base - 90, chat, 'user-a', 0, { type: 'upload', kind: 'unspec' });
+    assert.equal(await store.getUploadRequest(chat, 'user-a'), null);
+    await store.prepareMenu(base - 91, chat, 'user-a', 0, { type: 'upload', kind: 'unspec' });
+    assert.equal(await store.getUploadRequest(chat, 'user-a'), 'unspec');
     await assert.rejects(store.prepareMenu(base - 28, chat, 'user-a', 0, { type: 'branch', kind: 'unspec', scope: 'BONE' }), InputError);
     console.log('Pilihan cetak sebelum upload berhasil dicegah.');
     await store.prepareUpload(base - 29, chat, 5, stamp(27, 9), snapshot(3), '2026-10-27', 'SEMUA', { kind: 'unspec', userId: 'user-a', threadId: 0 });
+    assert.equal(await store.getUploadRequest(chat, 'user-a'), null);
     const uploaded = (await store.getJob(base - 29))!.messages;
     assert.equal(uploaded.length, 1);
     const uploadMenu = uploaded[0];
@@ -110,9 +125,12 @@ try {
     assert.deepEqual(await store.getPreference(chat, 'user-a'), { kind: 'unspec', scope: 'BONE', date: '2026-10-27' });
     assert.deepEqual(await store.getPreference(chat, 'user-b'), { kind: 'valins_dc', scope: null, date: null });
     assert.deepEqual(await store.getPreference(chat, 'user-a', 42), { kind: 'valins_visit', scope: null, date: null });
+    assert.equal(await store.getUploadRequest(chat, 'user-b'), 'valins_dc');
+    assert.equal(await store.getUploadRequest(chat, 'user-a', 42), 'valins_visit');
     await store.prepareMenu(base - 24, chat, 'user-a', 0, { type: 'main' });
     await store.prepareMenu(base - 24, chat, 'user-a', 0, { type: 'kind', kind: 'unspec' });
     assert.equal(await store.getPreference(chat, 'user-a'), null); // Retry cannot reapply a different action.
+    assert.equal(await store.getUploadRequest(chat, 'user-a'), null);
     assert.equal((await store.getPreference(chat, 'user-b'))?.kind, 'valins_dc');
     await store.prepareUpload(base - 25, chat, 5, stamp(27, 10), snapshot(3), '2026-10-27', 'BONE');
     assert.equal((await store.getJob(base - 25))?.messages.length, 1);
@@ -133,7 +151,7 @@ try {
     await assert.rejects(store.prepareMenu(base - 37, flowChat, context.userId, 0, { type: 'branch', kind: 'unspec', scope: 'PARE-PARE', date: '2026-10-27' }), InputError);
     assert.match((await store.report(flowChat, '2026-10-28'))[3]!, /SALDO \(H\): 5\nSALDO \(H-1\): 4\n/);
     assert.match((await store.report(flowChat, '2026-10-26'))[3]!, /SALDO \(H\): 2\n/);
-    console.log('Uji menu lulus: upload sebelum cetak, tombol terikat tanggal, H-1 hari sebelumnya, isolasi pengguna/topic, dan retry.');
+    console.log('Uji menu lulus: izin upload sekali pakai, kedaluwarsa 15 menit, isolasi chat/pengguna/topic, tanggal, H-1, dan retry.');
 
     const liveChat = `integration-check:${randomUUID()}`;
     const live = { date: '2026-10-27', fetchedAt: new Date(stamp(27, 9) * 1000).toISOString(), timestamp: stamp(27, 9), snapshot: snapshot(3), previous: snapshot(8) };

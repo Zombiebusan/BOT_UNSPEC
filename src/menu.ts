@@ -78,6 +78,7 @@ export function uploadPrompt(kind: ReportType): RichMessage {
       `📊 ${REPORT_LABELS[kind]}`, '',
       `📤 Silakan upload file ${kind === 'unspec' ? 'CSV (.csv)' : 'Excel (.xlsx)'}.`,
       'Setelah file diproses, tombol pilihan branch dan Cetak Semua akan muncul.', '',
+      'Bot menunggu satu file yang sesuai selama 15 menit. Untuk file berikutnya pilih Upload File Baru.', '',
       kind === 'unspec' ? '📅 Tanpa caption, tanggal data otomatis kemarin WITA.' : '📅 Tanpa caption, tanggal arsip mengikuti tanggal upload WITA.',
       ...(kind === 'unspec' ? ['Contoh: upload tanggal 27 → data tanggal 26 → pembanding tanggal 25.'] : []),
       'Untuk tanggal lain, isi caption tanggal, misalnya 2026-10-26.', '',
@@ -102,6 +103,7 @@ export function branchMenu(kind: ReportType, date: string, hasPrevious?: boolean
       [button('KENDARI'), button('MAKASSAR')],
       [button('SEMUA', '🖨 CETAK SEMUA')],
       ...(kind === 'unspec' ? [[{ text: '📊 SULBAGSEL REPORT', callback_data: `table:unspec:${date}` }]] : []),
+      [{ text: '📤 Upload File Baru', callback_data: kind === 'unspec' ? 'upload:unspec' : `menu:${kind}` }],
       [{ text: '⬅️ Menu Utama', callback_data: 'menu:main' }]
     ] }
   };
@@ -117,7 +119,7 @@ export function selectedMenu(kind: ReportType, scope: ValinsScope, date: string)
     ].join('\n'),
     reply_markup: { inline_keyboard: [
       [{ text: '🖨 Cetak Ulang', callback_data: `print:${kind}:${scope}:${date}` }],
-      [{ text: '⬅️ Ganti Branch', callback_data: `branches:${kind}:${date}` }, { text: '📤 Upload File Baru', callback_data: `menu:${kind}` }],
+      [{ text: '⬅️ Ganti Branch', callback_data: `branches:${kind}:${date}` }, { text: '📤 Upload File Baru', callback_data: kind === 'unspec' ? 'upload:unspec' : `menu:${kind}` }],
       [{ text: '🏠 Menu Utama', callback_data: 'menu:main' }]
     ] }
   };

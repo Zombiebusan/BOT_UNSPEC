@@ -76,6 +76,7 @@ test('XLSX upload is parsed and stored as VALINS; VALINS command selects the req
   const download = t.mock.method(Telegram.prototype, 'downloadXlsx', async () => workbookBytes(rows));
   let preference: ReportPreference | null = null;
   t.mock.method(Store.prototype, 'getPreference', async () => preference);
+  t.mock.method(Store.prototype, 'getUploadRequest', async () => preference?.kind ?? 'valins_all');
   const upload = t.mock.method(Store.prototype, 'prepareValinsUpload', async () => {});
   const command = t.mock.method(Store.prototype, 'valinsReport', async () => ['chosen report']);
   const messages = t.mock.method(Store.prototype, 'prepareMessages', async () => {});
@@ -111,7 +112,7 @@ test('XLSX upload is parsed and stored as VALINS; VALINS command selects the req
     preference = { kind: 'unspec', scope: 'SEMUA' };
     assert.equal(await run(13, { document: { file_id: 'file', file_name: 'report.xlsx' } }), 200);
     assert.equal(download.mock.callCount(), 2);
-    assert.match(String(messages.mock.calls[1]!.arguments[2]![0]), /Pilihan Anda UNSPEC/);
+    assert.equal(messages.mock.callCount(), 1, 'file of the wrong kind must be ignored without a chat reply');
     preference = { kind: 'unspec', scope: null };
     assert.equal(await run(14, { document: { file_id: 'file', file_name: 'report.csv' } }), 200);
     assert.equal(csv.mock.callCount(), 1);

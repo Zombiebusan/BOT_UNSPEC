@@ -23,6 +23,7 @@ export interface TelegramCallbackQuery {
 export interface TelegramUpdate { update_id: number; message?: TelegramMessage; callback_query?: TelegramCallbackQuery }
 
 interface ApiResponse<T> { ok: boolean; result: T; error_code?: number; parameters?: { retry_after?: number; migrate_to_chat_id?: number } }
+const usernameCache = new Map<string, { username: string; expires: number }>();
 export class TelegramError extends Error {
   constructor(public readonly code: number, public readonly retryAfter?: number, public readonly migrateToChatId?: number) {
     // Do not include Telegram response descriptions or token-bearing URLs in logs.
@@ -32,6 +33,17 @@ export class TelegramError extends Error {
 
 export class Telegram {
   constructor(private readonly token: string) {}
+
+  async getUsername(): Promise<string> {
+    const key = this.token.split(':')[0]!;
+    const cached = usernameCache.get(key);
+    if (cached && cached.expires > Date.now()) return cached.username;
+    const me = await this.call<{ username?: string }>('getMe', {});
+    if (!me.username || !/^[A-Za-z0-9_]+$/.test(me.username)) throw new TelegramError(502);
+    const username = me.username.toLowerCase();
+    usernameCache.set(key, { username, expires: Date.now() + 60_000 });
+    return username;
+  }
 
   async call<T>(method: string, body: Record<string, unknown> | FormData): Promise<T> {
     let response: Response;

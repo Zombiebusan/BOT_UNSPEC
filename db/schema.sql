@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS report_preferences (
 );
 
 ALTER TABLE report_preferences ADD COLUMN IF NOT EXISTS upload_date DATE;
+ALTER TABLE report_preferences ADD COLUMN IF NOT EXISTS awaiting_upload BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE report_preferences ADD COLUMN IF NOT EXISTS upload_requested_at TIMESTAMPTZ;
 
 -- Kegagalan permanen tetap tercatat, tetapi tidak menahan antrean update Telegram.
 ALTER TABLE telegram_jobs ADD COLUMN IF NOT EXISTS failed_at TIMESTAMPTZ;

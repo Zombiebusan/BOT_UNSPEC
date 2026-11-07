@@ -10,6 +10,15 @@
 
 ## 1. Deploy source proyek
 
+Sebelum deploy pembaruan ini, jalankan pada database bot yang dikonfigurasi di `.env`:
+
+```powershell
+npm run db:setup
+npm run db:check
+```
+
+Setup menambahkan kolom `awaiting_upload` dan `upload_requested_at` pada `report_preferences` tanpa menghapus snapshot. Bot memakai kolom ini untuk menerima file hanya setelah pengguna memilih menu upload. `db:check` memeriksa izin upload, kedaluwarsa, isolasi pengguna/topic, dan retry dalam transaksi yang di-rollback.
+
 Anda dapat menghubungkan repository proyek ke Vercel, atau menjalankan Vercel CLI sendiri:
 
 ```powershell
@@ -79,8 +88,8 @@ Command ini menghubungkan bot ke `https://nama-project-anda.vercel.app/api/teleg
 
 H-1 otomatis tersedia setelah ada snapshot hari sebelumnya di chat yang sama. Untuk mengupload dua file historis hari ini:
 
-1. Kirim `export (35).csv` dengan caption **`tanggal=2026-10-25`**.
-2. Kirim `export (36).csv` dengan caption **`tanggal=2026-10-26`**.
+1. Pilih **CSV / Arsip**, lalu kirim `export (35).csv` dengan caption **`tanggal=2026-10-25`**.
+2. Pilih **Upload File Baru**, lalu kirim `export (36).csv` dengan caption **`tanggal=2026-10-26`**.
 3. Laporan tanggal 26 akan menggunakan data tanggal 25 sebagai H-1.
 
 Tanpa caption, **CSV UNSPEC dianggap data kemarin WITA**: upload tanggal 27 berarti data tanggal 26 dengan pembanding tanggal 25; upload tanggal 28 berarti data tanggal 27 dengan pembanding tanggal 26. Untuk tanggal lain, isi caption. Jika file hari sebelumnya diupload belakangan, gunakan `/report 2026-10-26` untuk melihat pembanding yang telah diperbarui.
@@ -88,6 +97,8 @@ Tanpa caption, **CSV UNSPEC dianggap data kemarin WITA**: upload tanggal 27 bera
 Anda juga bisa menulis caption tanggal saja, misalnya `2026-10-25` atau `2026-10-26`.
 
 Semua anggota dalam satu grup menggunakan snapshot grup tersebut; chat lain memiliki riwayat sendiri.
+
+Bot menunggu satu file yang sesuai selama **15 menit** dari pengguna dan chat/topic yang membuka menu upload. Setelah berhasil, pilih **Upload File Baru** untuk file berikutnya. Chat biasa, perintah untuk bot lain, foto acak, file salah jenis, dan file tanpa permintaan aktif tidak dibalas. Untuk menguji foto laporan, balas pesan laporan bot sendiri dengan satu foto.
 
 ## Pemeriksaan lokal opsional
 

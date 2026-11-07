@@ -121,10 +121,10 @@ export class Store {
       let messages: OutgoingMessage[] = note ? [...selected, note] : selected;
       if (menuContext) {
         await tx`
-          INSERT INTO report_preferences (chat_id, user_id, thread_id, report_type, scope, upload_date)
-          VALUES (${chatId}, ${menuContext.userId}, ${menuContext.threadId}, ${menuContext.kind}, NULL, ${date}::date)
+          INSERT INTO report_preferences (chat_id, user_id, thread_id, report_type, scope, upload_date, awaiting_upload, upload_requested_at)
+          VALUES (${chatId}, ${menuContext.userId}, ${menuContext.threadId}, ${menuContext.kind}, NULL, ${date}::date, false, NULL)
           ON CONFLICT (chat_id, user_id, thread_id) DO UPDATE SET
-            report_type = EXCLUDED.report_type, scope = NULL, upload_date = EXCLUDED.upload_date, updated_at = NOW()
+            report_type = EXCLUDED.report_type, scope = NULL, upload_date = EXCLUDED.upload_date, awaiting_upload = false, upload_requested_at = NULL, updated_at = NOW()
         `;
         const menu = branchMenu('unspec', date, Boolean(old[0]));
         if (note) menu.text += `\n\n${note}`;
@@ -167,9 +167,9 @@ export class Store {
         const next = await tx<{ snapshot: Snapshot; source_time: string; date: string }[]>`SELECT snapshot, source_time::text, report_date::text AS date FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${live.date}::date + 1`;
         if (next[0]) await tx`UPDATE daily_snapshots SET reports = ${tx.json(renderReports(next[0].snapshot, live.snapshot, Number(next[0].source_time), next[0].date))} WHERE chat_id = ${chatId} AND report_date = ${next[0].date}::date`;
       }
-      await tx`INSERT INTO report_preferences (chat_id, user_id, thread_id, report_type, scope, upload_date)
-        VALUES (${chatId}, ${userId}, ${threadId}, 'unspec', ${scope}, ${live.date}::date)
-        ON CONFLICT (chat_id, user_id, thread_id) DO UPDATE SET report_type = EXCLUDED.report_type, scope = EXCLUDED.scope, upload_date = EXCLUDED.upload_date, updated_at = NOW()`;
+      await tx`INSERT INTO report_preferences (chat_id, user_id, thread_id, report_type, scope, upload_date, awaiting_upload, upload_requested_at)
+        VALUES (${chatId}, ${userId}, ${threadId}, 'unspec', ${scope}, ${live.date}::date, false, NULL)
+        ON CONFLICT (chat_id, user_id, thread_id) DO UPDATE SET report_type = EXCLUDED.report_type, scope = EXCLUDED.scope, upload_date = EXCLUDED.upload_date, awaiting_upload = false, upload_requested_at = NULL, updated_at = NOW()`;
       const messages = format === 'table'
         ? unspecTableMessages(live.snapshot, previous, live.date, morning).map(message => ({ ...message, reply_markup: selectedUnspecTableMenu(live.date, true).reply_markup }))
         : [...selectUnspecReports(reports, scope), selectedLiveUnspecMenu(scope, live.date, live.fetchedAt, previous !== null)];
@@ -194,10 +194,10 @@ export class Store {
       let messages: OutgoingMessage[] = renderValinsReports(snapshot, kind, scope);
       if (menuContext) {
         await tx`
-          INSERT INTO report_preferences (chat_id, user_id, thread_id, report_type, scope, upload_date)
-          VALUES (${chatId}, ${menuContext.userId}, ${menuContext.threadId}, ${menuContext.kind}, NULL, ${date}::date)
+          INSERT INTO report_preferences (chat_id, user_id, thread_id, report_type, scope, upload_date, awaiting_upload, upload_requested_at)
+          VALUES (${chatId}, ${menuContext.userId}, ${menuContext.threadId}, ${menuContext.kind}, NULL, ${date}::date, false, NULL)
           ON CONFLICT (chat_id, user_id, thread_id) DO UPDATE SET
-            report_type = EXCLUDED.report_type, scope = NULL, upload_date = EXCLUDED.upload_date, updated_at = NOW()
+            report_type = EXCLUDED.report_type, scope = NULL, upload_date = EXCLUDED.upload_date, awaiting_upload = false, upload_requested_at = NULL, updated_at = NOW()
         `;
         messages = [branchMenu(menuContext.kind, date)];
       }
@@ -225,6 +225,13 @@ export class Store {
     return rows[0] ?? null;
   }
 
+  async getUploadRequest(chatId: string, userId: string, threadId = 0): Promise<ReportPreference['kind'] | null> {
+    const rows = await this.sql<{ kind: ReportPreference['kind'] }[]>`SELECT report_type AS kind FROM report_preferences
+      WHERE chat_id = ${chatId} AND user_id = ${userId} AND thread_id = ${threadId}
+        AND awaiting_upload = true AND upload_requested_at > now() - interval '15 minutes'`;
+    return rows[0]?.kind ?? null;
+  }
+
   async prepareMenu(updateId: number, chatId: string, userId: string, threadId: number, action: MenuAction): Promise<void> {
     if (action.type === 'live' || (action.type === 'table' && !action.date)) throw new InputError('Gunakan pemrosesan API untuk cetak UNSPEC terbaru.');
     await this.sql.begin(async tx => {
@@ -236,11 +243,12 @@ export class Store {
         await tx`DELETE FROM report_preferences WHERE chat_id = ${chatId} AND user_id = ${userId} AND thread_id = ${threadId}`;
         messages = [mainMenu()];
       } else if (action.type === 'kind' || action.type === 'upload' || action.type === 'live-menu') {
+        const waiting = action.type === 'upload' || (action.type === 'kind' && action.kind !== 'unspec');
         await tx`
-          INSERT INTO report_preferences (chat_id, user_id, thread_id, report_type, scope, upload_date)
-          VALUES (${chatId}, ${userId}, ${threadId}, ${action.kind}, NULL, NULL)
+          INSERT INTO report_preferences (chat_id, user_id, thread_id, report_type, scope, upload_date, awaiting_upload, upload_requested_at)
+          VALUES (${chatId}, ${userId}, ${threadId}, ${action.kind}, NULL, NULL, ${waiting}, CASE WHEN ${waiting} THEN now() ELSE NULL END)
           ON CONFLICT (chat_id, user_id, thread_id) DO UPDATE SET
-            report_type = EXCLUDED.report_type, scope = NULL, upload_date = NULL, updated_at = NOW()
+            report_type = EXCLUDED.report_type, scope = NULL, upload_date = NULL, awaiting_upload = EXCLUDED.awaiting_upload, upload_requested_at = EXCLUDED.upload_requested_at, updated_at = NOW()
         `;
         messages = [(action.kind === 'unspec' && action.type !== 'upload') ? liveUnspecMenu() : uploadPrompt(action.kind)];
       } else {

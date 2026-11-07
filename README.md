@@ -19,7 +19,15 @@ Tombol **Cetak Ulang** UNSPEC live mengambil API lagi; **Ganti Branch** membuka 
 
 `/start` membuka menu utama dan mereset pilihan Anda di chat/topic tersebut tanpa menghapus snapshot harian. Pilihan setiap pengguna dipisahkan, sedangkan riwayat data tetap milik chat/grup yang sama.
 
-**CETAK SEMUA** menghasilkan 4 laporan untuk UNSPEC, 4 laporan untuk salah satu jenis VALINS, atau 8 laporan untuk VALINS ODP DAN DC. File historis tetap dapat diberi caption tanggal. File yang tidak sesuai jenis pilihan ditolak dengan petunjuk yang benar.
+**CETAK SEMUA** menghasilkan 4 laporan untuk UNSPEC, 4 laporan untuk salah satu jenis VALINS, atau 8 laporan untuk VALINS ODP DAN DC. File historis tetap dapat diberi caption tanggal.
+
+### Bot hanya merespons permintaan resmi
+
+Di grup maupun chat pribadi, bot mengabaikan chat biasa, perintah tidak dikenal atau untuk bot lain, media acak, serta foto yang tidak membalas laporan bot ini. Bantuan tersedia melalui `/help`.
+
+Untuk upload, pilih **CSV / Arsip** pada UNSPEC atau pilih jenis **VALINS** terlebih dahulu. Bot menunggu **satu file yang sesuai selama 15 menit**, khusus pengguna dan chat/topic yang memilih menu tersebut. File tanpa permintaan aktif, file salah jenis, dan permintaan kedaluwarsa diabaikan tanpa balasan. Setelah upload berhasil, gunakan **📤 Upload File Baru** untuk upload berikutnya. Kesalahan isi file yang sesuai permintaan aktif tetap dijelaskan agar dapat diperbaiki.
+
+Jalankan `npm run db:setup` sebelum deploy versi ini untuk menambahkan kolom `awaiting_upload` dan `upload_requested_at` pada `report_preferences`.
 
 Setelah deploy versi menu tombol, jalankan **`npm run webhook:set`** agar Telegram mengirim update `callback_query` dari tombol. Database menu dibuat dengan `npm run db:setup` (sudah dijalankan pada database proyek saat fitur dibangun).
 
@@ -56,7 +64,7 @@ Gunakan `-` untuk CSV H-1 jika belum tersedia. Format tabel memakai konfigurasi 
 3. Kirim **satu foto** dari galeri Telegram.
 4. Bot membalas foto Anda dengan **foto yang sama dan teks laporan sebagai caption**. Pesan hasil bot dapat diteruskan/forward.
 
-Teks diambil dari laporan yang Anda balas, termasuk tanggal dan angka aslinya. Caption yang Anda tulis pada foto tidak mengganti teks laporan. Balasan ke menu, pesan pengguna, atau bot lain akan diberi petunjuk untuk membalas laporan bot ini.
+Teks diambil dari laporan yang Anda balas, termasuk tanggal dan angka aslinya. Caption yang Anda tulis pada foto tidak mengganti teks laporan. Foto biasa serta balasan ke menu, pesan pengguna, atau bot lain diabaikan tanpa balasan.
 
 Jika teks laporan melampaui batas caption Telegram (**1.024 karakter**), bot mengirim **foto dan teks laporan lengkap sebagai dua pesan**, tanpa memotong isi. Untuk meneruskannya, pilih kedua pesan. Pengiriman menggunakan `file_id` foto Telegram, sehingga aplikasi tidak perlu mengunduh atau menyimpan gambar mentah. Grup/topic tetap didukung dan bot membalas di tempat foto dikirim.
 
@@ -76,7 +84,7 @@ Laporan bergambar tidak mengubah snapshot data, tanggal laporan, H-1, atau pilih
 - Upload berulang pada hari yang sama memperbarui data dan menampilkan pilihan cetak lagi. Pesan upload terakhir menjadi snapshot acuan hari itu, walaupun proses upload sebelumnya baru selesai belakangan.
 - H-1 menggunakan snapshot terakhir pada **tepat satu hari sebelumnya di chat yang sama**. Jika tidak tersedia, saldo H-1 dan growth bertuliskan `Belum tersedia`.
 - Snapshot lama dari HTML/JSON tidak diimpor. Hanya master STO dan LIS yang diambil dari dashboard.
-- Jika Anda mengirim ulang file identik melalui pesan baru, bot tetap membuat laporan. Pengulangan webhook untuk pesan yang sama dilanjutkan dari status pengiriman terakhir.
+- Jika Anda memilih Upload File Baru lalu mengirim ulang file identik melalui pesan baru, bot tetap membuat laporan. Pengulangan webhook untuk pesan yang sama dilanjutkan dari status pengiriman terakhir, meskipun izin upload sudah dipakai.
 - Tombol Cetak Semua mengirim empat laporan sebagai pesan terpisah. Catatan tiket di luar cakupan, duplikat, atau tiket tersaring ditampilkan pada konfirmasi upload.
 
 ## 1. Persiapan lokal
