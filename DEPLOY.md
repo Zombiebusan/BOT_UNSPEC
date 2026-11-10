@@ -121,4 +121,6 @@ Versi menu tombol memerlukan tabel `report_preferences` dan update webhook **`ca
 
 ## Fitur laporan bergambar
 
+UNSPEC **Cetak Semua** kini otomatis mengirim **4 laporan teks + 4 gambar tabel lengkap**, satu gambar untuk setiap Branch. Cetak satu Branch mengirim satu laporan + satu gambar. Gambar menggunakan snapshot yang sama dengan teks dan tersimpan dalam job retry. Deploy bot dengan `package.json` dan `package-lock.json` terbaru agar dependency `sharp` tersedia di Vercel. Tidak perlu mengubah endpoint API dashboard atau skema database untuk gambar Branch.
+
 Deploy source terbaru untuk mengaktifkan fitur **Reply/Balas laporan dengan foto**. Tidak ada environment variable atau migrasi database tambahan untuk fitur ini. Setelah bot mencetak laporan, balas pesan laporan tersebut dengan satu foto; bot mengirim ulang foto dengan caption teks laporan. Jika teks melebihi 1.024 karakter, foto dan laporan lengkap dikirim sebagai dua pesan yang dapat diteruskan bersama.

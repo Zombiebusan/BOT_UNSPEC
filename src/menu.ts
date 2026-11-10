@@ -41,7 +41,7 @@ export function mainMenu(): RichMessage {
 export function liveUnspecMenu(): RichMessage {
   const button = (scope: ValinsScope, text = scope as string) => ({ text, callback_data: `live:unspec:${scope}` });
   return {
-    text: ['📊 UNSPEC — DATA API', '', 'Pilih branch, CETAK SEMUA, atau SULBAGSEL REPORT. Bot mengambil posisi terbaru tanpa upload CSV.', '🕗 Hari operasional berganti pukul 08.00 WITA; sebelum itu tetap hari operasional kemarin.', '📈 H-1 menggunakan snapshot hari operasional sebelumnya.', '', 'CSV tetap tersedia untuk arsip dan koreksi tanggal historis.'].join('\n'),
+    text: ['📊 UNSPEC — DATA API', '', 'Pilih branch, CETAK SEMUA, atau SULBAGSEL REPORT. Bot mengambil posisi terbaru tanpa upload CSV.', '🖼 Setiap Branch mendapat laporan teks dan satu gambar tabel lengkap SA/STO. CETAK SEMUA mengirim 4 laporan + 4 gambar.', '🕗 Hari operasional berganti pukul 08.00 WITA; sebelum itu tetap hari operasional kemarin.', '📈 H-1 menggunakan snapshot hari operasional sebelumnya.', '', 'CSV tetap tersedia untuk arsip dan koreksi tanggal historis.'].join('\n'),
     reply_markup: { inline_keyboard: [
       [button('PARE-PARE'), button('BONE')], [button('KENDARI'), button('MAKASSAR')],
       [button('SEMUA', '🖨 CETAK SEMUA')],
@@ -54,7 +54,7 @@ export function liveUnspecMenu(): RichMessage {
 export function selectedLiveUnspecMenu(scope: ValinsScope, date: string, fetchedAt: string, hasPrevious: boolean): RichMessage {
   const time = new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Makassar', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(fetchedAt));
   return {
-    text: [`✅ Pilihan: UNSPEC — ${scope === 'SEMUA' ? 'SEMUA BRANCH' : scope}`, `📅 Tanggal data: ${date}`, `🕒 Posisi API: ${time} WITA`, `📈 H-1: ${previousDate(date)} (${hasPrevious ? 'tersedia' : 'belum tersedia'})`, '', 'Cetak Ulang mengambil posisi API terbaru.', '🖼 Untuk menambahkan gambar, Reply/Balas pesan laporan dengan satu foto.'].join('\n'),
+    text: [`✅ Pilihan: UNSPEC — ${scope === 'SEMUA' ? 'SEMUA BRANCH' : scope}`, `📅 Tanggal data: ${date}`, `🕒 Posisi API: ${time} WITA`, `📈 H-1: ${previousDate(date)} (${hasPrevious ? 'tersedia' : 'belum tersedia'})`, '', '🖼 Laporan teks dan gambar tabel lengkap sudah dicetak untuk setiap Branch.', 'Cetak Ulang mengambil posisi API terbaru.'].join('\n'),
     reply_markup: { inline_keyboard: [
       [{ text: '🖨 Cetak Ulang', callback_data: `live:unspec:${scope}` }],
       [{ text: '⬅️ Ganti Branch', callback_data: 'live:unspec:menu' }, { text: '📤 CSV / Arsip', callback_data: 'upload:unspec' }],
@@ -96,7 +96,8 @@ export function branchMenu(kind: ReportType, date: string, hasPrevious?: boolean
       `📅 Tanggal data: ${date}`,
       ...(kind === 'unspec' ? [`📈 Pembanding H-1: ${previousDate(date)}${hasPrevious === undefined ? '' : hasPrevious ? ' (tersedia)' : ' (belum tersedia)'}`] : []), '',
       'Silakan pilih branch yang ingin dicetak.',
-      'Tekan Cetak Semua untuk mencetak seluruh branch dari data ini.'
+      'Tekan Cetak Semua untuk mencetak seluruh branch dari data ini.',
+      ...(kind === 'unspec' ? ['🖼 Setiap Branch dicetak sebagai laporan teks + satu gambar tabel lengkap SA/STO.'] : [])
     ].join('\n'),
     reply_markup: { inline_keyboard: [
       [button('PARE-PARE'), button('BONE')],
@@ -115,7 +116,7 @@ export function selectedMenu(kind: ReportType, scope: ValinsScope, date: string)
       `📅 Tanggal data: ${date}`, '',
       'Laporan dari file yang Anda upload sudah dicetak.',
       'Gunakan tombol di bawah untuk mencetak branch lain atau mengupload file baru.', '',
-      '🖼 Untuk menambahkan gambar, Reply/Balas pesan laporan dengan satu foto.'
+      kind === 'unspec' ? '🖼 Gambar tabel lengkap SA/STO sudah disertakan untuk setiap Branch.' : '🖼 Untuk menambahkan gambar, Reply/Balas pesan laporan dengan satu foto.'
     ].join('\n'),
     reply_markup: { inline_keyboard: [
       [{ text: '🖨 Cetak Ulang', callback_data: `print:${kind}:${scope}:${date}` }],

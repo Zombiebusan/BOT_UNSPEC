@@ -19,7 +19,21 @@ Tombol **Cetak Ulang** UNSPEC live mengambil API lagi; **Ganti Branch** membuka 
 
 `/start` membuka menu utama dan mereset pilihan Anda di chat/topic tersebut tanpa menghapus snapshot harian. Pilihan setiap pengguna dipisahkan, sedangkan riwayat data tetap milik chat/grup yang sama.
 
-**CETAK SEMUA** menghasilkan 4 laporan untuk UNSPEC, 4 laporan untuk salah satu jenis VALINS, atau 8 laporan untuk VALINS ODP DAN DC. File historis tetap dapat diberi caption tanggal.
+**CETAK SEMUA** menghasilkan **4 laporan teks + 4 gambar tabel** untuk UNSPEC, 4 laporan untuk salah satu jenis VALINS, atau 8 laporan untuk VALINS ODP DAN DC. File historis tetap dapat diberi caption tanggal.
+
+### Gambar tabel UNSPEC per Branch
+
+Cetak Branch/Cetak Semua dari API maupun menu CSV mengirim laporan teks lengkap, lalu **satu gambar PNG utuh untuk Branch tersebut**. Urutannya BONE, KENDARI, MAKASSAR, PARE-PARE. Tabel mengikuti tampilan rekap dashboard: header biru tua, baris Branch/Service Area, dan seluruh STO tanpa scroll atau potongan gambar. Gambar dibuat otomatis dari snapshot dan H-1 yang sama dengan laporan, bukan screenshot statis.
+
+Kolom: **Branch / Service Area / STO, Saldo H, Saldo H-1, LIS Pelanggan, Target Saldo 0,10%, Target, Real H, Real H-1, Δ Saldo, Achieved**. H-1 yang belum tersedia ditampilkan `—`. Gambar dan teks disimpan dalam job yang sama; retry melanjutkan pesan yang belum terkirim tanpa mengambil angka baru. Teks laporan dikirim terpisah agar tidak terpotong oleh batas caption Telegram.
+
+Preview empat gambar tanpa mengirim Telegram:
+
+```powershell
+npm run unspec:images:preview -- "hari-ini.csv" "hari-kemarin.csv" "2026-11-10" "C:\Users\Admin\AppData\Local\Temp\opencode\unspec-images"
+```
+
+Gunakan `-` untuk CSV H-1 yang belum tersedia. Deploy source beserta dependency `sharp` melalui `npm install`/`npm ci`; fitur gambar tidak memerlukan migrasi database tambahan.
 
 ### Bot hanya merespons permintaan resmi
 
@@ -85,7 +99,7 @@ Laporan bergambar tidak mengubah snapshot data, tanggal laporan, H-1, atau pilih
 - H-1 menggunakan snapshot terakhir pada **tepat satu hari sebelumnya di chat yang sama**. Jika tidak tersedia, saldo H-1 dan growth bertuliskan `Belum tersedia`.
 - Snapshot lama dari HTML/JSON tidak diimpor. Hanya master STO dan LIS yang diambil dari dashboard.
 - Jika Anda memilih Upload File Baru lalu mengirim ulang file identik melalui pesan baru, bot tetap membuat laporan. Pengulangan webhook untuk pesan yang sama dilanjutkan dari status pengiriman terakhir, meskipun izin upload sudah dipakai.
-- Tombol Cetak Semua mengirim empat laporan sebagai pesan terpisah. Catatan tiket di luar cakupan, duplikat, atau tiket tersaring ditampilkan pada konfirmasi upload.
+- Tombol Cetak Semua mengirim empat pasangan laporan teks dan gambar tabel Branch. Catatan tiket di luar cakupan, duplikat, atau tiket tersaring ditampilkan pada konfirmasi upload.
 
 ## 1. Persiapan lokal
 

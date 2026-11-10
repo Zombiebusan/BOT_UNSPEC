@@ -6,6 +6,7 @@ import type { OutgoingMessage } from './messages.js';
 import { branchMenu, liveUnspecMenu, mainMenu, selectedLiveUnspecMenu, selectedUnspecTableMenu, selectedMenu, uploadPrompt, valinsKind, type MenuAction, type ReportPreference, type UploadMenuContext } from './menu.js';
 import type { LiveUnspecReport } from './unspec-api.js';
 import { unspecTableMessages } from './unspec-table.js';
+import { branchReportMessages } from './unspec-branch-image.js';
 import { baselineFromReportJob, baselineFromSnapshot, chooseOpeningBaseline, operationalWindow, type ReportMorningBaseline } from './morning-baseline.js';
 
 interface StoredUnspecSnapshot extends Snapshot { reportMorning?: ReportMorningBaseline; reportSource?: 'api'; reportPrevious?: { date: string; snapshot: Snapshot } }
@@ -172,7 +173,7 @@ export class Store {
         ON CONFLICT (chat_id, user_id, thread_id) DO UPDATE SET report_type = EXCLUDED.report_type, scope = EXCLUDED.scope, upload_date = EXCLUDED.upload_date, awaiting_upload = false, upload_requested_at = NULL, updated_at = NOW()`;
       const messages = format === 'table'
         ? unspecTableMessages(live.snapshot, previous, live.date, morning).map(message => ({ ...message, reply_markup: selectedUnspecTableMenu(live.date, true).reply_markup }))
-        : [...selectUnspecReports(reports, scope), selectedLiveUnspecMenu(scope, live.date, live.fetchedAt, previous !== null)];
+        : [...await branchReportMessages(live.snapshot, previous, live.timestamp, live.date, scope, reports), selectedLiveUnspecMenu(scope, live.date, live.fetchedAt, previous !== null)];
       await tx`INSERT INTO telegram_jobs (update_id, chat_id, messages) VALUES (${updateId}, ${chatId}, ${tx.json(messages as unknown as postgres.JSONValue)})`;
     });
   }
@@ -278,9 +279,16 @@ export class Store {
           messages = unspecTableMessages(rows[0].snapshot, previous, date, morning).map(message => ({ ...message, reply_markup: selectedUnspecTableMenu(date, false).reply_markup }));
         } else {
           let reports: string[] = [];
+          let imageReports: OutgoingMessage[] | null = null;
           if (action.kind === 'unspec') {
-            const rows = await tx<{ reports: string[] }[]>`SELECT reports FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${date}::date`;
-            if (rows[0]) reports = selectUnspecReports(rows[0].reports, action.scope);
+            const rows = await tx<{ reports: string[]; snapshot: StoredUnspecSnapshot; source_time: string }[]>`SELECT reports, snapshot, source_time::text FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${date}::date`;
+            if (rows[0]) {
+              reports = selectUnspecReports(rows[0].reports, action.scope);
+              const old = await tx<{ snapshot: Snapshot }[]>`SELECT snapshot FROM daily_snapshots WHERE chat_id = ${chatId} AND report_date = ${previousDate(date)}::date`;
+              const savedPrevious = rows[0].snapshot.reportPrevious;
+              const previous = old[0]?.snapshot ?? (savedPrevious?.date === previousDate(date) ? savedPrevious.snapshot : null);
+              imageReports = await branchReportMessages(rows[0].snapshot, previous, Number(rows[0].source_time), date, action.scope, rows[0].reports);
+            }
           } else {
             const rows = await tx<{ snapshot: ValinsSnapshot }[]>`SELECT snapshot FROM valins_snapshots WHERE chat_id = ${chatId} AND report_date = ${date}::date`;
             if (rows[0]) reports = renderValinsReports(rows[0].snapshot, valinsKind(action.kind), action.scope);
@@ -289,7 +297,7 @@ export class Store {
           if (!hasData) throw new InputError('Data upload tidak ditemukan. Silakan upload ulang file Anda.');
           await tx`UPDATE report_preferences SET scope = ${action.scope}, updated_at = NOW()
             WHERE chat_id = ${chatId} AND user_id = ${userId} AND thread_id = ${threadId}`;
-          messages = [...reports, selectedMenu(action.kind, action.scope, date)];
+          messages = [...(imageReports ?? reports), selectedMenu(action.kind, action.scope, date)];
         }
       }
       await tx`INSERT INTO telegram_jobs (update_id, chat_id, messages)

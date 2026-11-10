@@ -11,6 +11,9 @@ import type { OutgoingMessage } from '../src/messages.js';
 import { UnspecApi, UnspecPendingError, type LiveUnspecReport } from '../src/unspec-api.js';
 import { InputError, parseSnapshot, renderReports, witaDate } from '../src/report.js';
 import { unspecTableMessages } from '../src/unspec-table.js';
+import { branchReportMessages } from '../src/unspec-branch-image.js';
+import { selectedLiveUnspecMenu } from '../src/menu.js';
+import type { ValinsScope } from '../src/valins.js';
 
 test('webhook verifies the secret and accepts all users without an account allowlist', async t => {
   const original = { ...process.env };
@@ -243,7 +246,7 @@ test('UNSPEC live text/table print bypasses CSV and stale menu dates; retries re
   const valins = t.mock.method(Store.prototype, 'prepareValinsUpload', async () => { throw new Error('VALINS must not change'); });
   t.mock.method(Telegram.prototype, 'answerCallback', async () => {});
   const prepare = t.mock.method(Store.prototype, 'prepareLiveUnspec', async (id: number, chat: string, _user: string, _thread: number, _scope: unknown, input: LiveUnspecReport, format?: 'text' | 'table') => {
-    const messages = format === 'table' ? unspecTableMessages(input.snapshot, input.previous, input.date, input.morning ?? null) : renderReports(input.snapshot, input.previous, input.timestamp, input.date);
+    const messages = format === 'table' ? unspecTableMessages(input.snapshot, input.previous, input.date, input.morning ?? null) : await branchReportMessages(input.snapshot, input.previous, input.timestamp, input.date, _scope as ValinsScope);
     jobs.set(id, { update_id: String(id), chat_id: chat, messages, delivered: messages.length });
   });
   t.mock.method(Store.prototype, 'prepareMessages', async (id: number, chat: string, messages: OutgoingMessage[]) => { jobs.set(id, { update_id: String(id), chat_id: chat, messages, delivered: messages.length }); });
@@ -262,8 +265,8 @@ test('UNSPEC live text/table print bypasses CSV and stale menu dates; retries re
     assert.equal(latest.mock.callCount(), 1);
     assert.deepEqual(prepare.mock.calls[0]!.arguments.slice(0, 5), [600, '-100123', '456', 42, 'SEMUA']);
     assert.equal(prepare.mock.calls[0]!.arguments[5]!.date, date);
-    assert.equal(jobs.get(600)!.messages.length, 4);
-    assert.deepEqual(jobs.get(600)!.messages, renderReports(snapshot, null, now, date));
+    assert.equal(jobs.get(600)!.messages.length, 8);
+    assert.deepEqual(jobs.get(600)!.messages.filter(message => typeof message === 'string'), renderReports(snapshot, null, now, date));
     assert.equal(csv.mock.callCount(), 0);assert.equal(valins.mock.callCount(), 0);
     assert.equal(await run(602, 'table:unspec:live'), 200);
     assert.equal(await run(602, 'table:unspec:live'), 200);
@@ -284,6 +287,54 @@ test('UNSPEC live text/table print bypasses CSV and stale menu dates; retries re
     assert.equal(await run(601), 200);
     assert.equal(prepare.mock.callCount(), 3);
     assert.match(String(jobs.get(601)!.messages[0]), /API sementara gagal/);
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
+    Object.assign(process.env, original);
+  }
+});
+
+test('UNSPEC four-branch image delivery resumes after a failed photo without resending earlier reports or refetching API', async t => {
+  const original = { ...process.env };
+  Object.assign(process.env, { TELEGRAM_BOT_TOKEN: '777:test', TELEGRAM_WEBHOOK_SECRET: 'test_secret_12345678', DATABASE_URL: 'postgresql://not-connected' });
+  const timestamp = Math.floor(Date.now() / 1000), date = witaDate(timestamp);
+  const live = { date, fetchedAt: new Date(timestamp * 1000).toISOString(), timestamp, snapshot: parseSnapshot('INCIDENT,WORKZONE\nINC1,ANT', date), previous: null };
+  let job: Job | null = null, failPhoto = true;
+  const sent: OutgoingMessage[] = [];
+  const latest = t.mock.method(UnspecApi.prototype, 'latest', async () => live);
+  t.mock.method(Store.prototype, 'getJob', async () => job);
+  const prepare = t.mock.method(Store.prototype, 'prepareLiveUnspec', async (id: number, chat: string) => {
+    const messages = [...await branchReportMessages(live.snapshot, null, timestamp, date, 'SEMUA'), selectedLiveUnspecMenu('SEMUA', date, live.fetchedAt, false)];
+    job = { update_id: String(id), chat_id: chat, messages, delivered: 0 };
+  });
+  t.mock.method(Store.prototype, 'claim', async () => job);
+  t.mock.method(Store.prototype, 'advance', async (_id: number, _owner: string, delivered: number) => { job!.delivered = delivered; });
+  t.mock.method(Store.prototype, 'release', async () => {});
+  t.mock.method(Telegram.prototype, 'answerCallback', async () => {});
+  t.mock.method(console, 'error', () => {});
+  t.mock.method(Telegram.prototype, 'send', async (_chat: string, message: OutgoingMessage, thread?: number) => {
+    assert.equal(thread, 42);sent.push(message);
+    if (failPhoto && typeof message !== 'string' && message.type === 'photo') { failPhoto = false;throw new TelegramError(429, 1); }
+  });
+  const run = async () => {
+    let status = 0;
+    const response = { setHeader() {}, status(code: number) { status = code;return this; }, json() {} } as unknown as ApiResponse;
+    await handler({ method: 'POST', headers: { 'x-telegram-bot-api-secret-token': 'test_secret_12345678' }, body: {
+      update_id: 810, callback_query: { id: 'images', from: { id: 456 }, data: 'live:unspec:SEMUA', message: {
+        message_id: 20, date: timestamp, from: { id: 777, is_bot: true }, chat: { id: -100123 }, message_thread_id: 42,
+      } },
+    } } as unknown as ApiRequest, response);
+    return status;
+  };
+  try {
+    assert.equal(await run(), 503);
+    const frozen = structuredClone((job as unknown as Job).messages);
+    assert.equal((job as unknown as Job).delivered, 1);
+    assert.equal(await run(), 200);
+    assert.equal(latest.mock.callCount(), 1);assert.equal(prepare.mock.callCount(), 1);
+    assert.equal((job as unknown as Job).delivered, 9);
+    assert.deepEqual((job as unknown as Job).messages, frozen);
+    assert.deepEqual(sent.slice(2), frozen.slice(1));
+    assert.equal(sent.filter(message => typeof message === 'string' && message.includes('BRANCH BONE')).length, 1);
   } finally {
     for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
     Object.assign(process.env, original);
