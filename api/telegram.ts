@@ -16,7 +16,7 @@ const HELP = [
   'MEMBUAT LAPORAN',
   '1. Ketik /start atau /menu.',
    '2. UNSPEC: pilih branch, Cetak Semua, atau SULBAGSEL REPORT; data terbaru diambil dari API.',
-   '   Cetak Branch: laporan teks + satu gambar tabel lengkap SA/STO. Cetak Semua: 4 laporan + 4 gambar.',
+   '   Cetak Branch: satu foto tabel SA/STO dengan caption laporan. Cetak Semua: 4 foto ber-caption.',
    '3. VALINS: pilih jenis VALINS, upload Excel sebagai dokumen, lalu pilih branch atau Cetak Semua.',
    '4. Upload CSV: pilih CSV / Arsip. Untuk file berikutnya, tekan Upload File Baru.',
    'Bot menunggu satu file yang sesuai selama 15 menit, dari pengguna dan chat/topic yang sama.', '',

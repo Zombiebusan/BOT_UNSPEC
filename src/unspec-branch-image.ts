@@ -3,6 +3,7 @@ import { BRANCHES, MASTER, masterForStoredBranch, type Branch } from './master.j
 import type { OutgoingMessage, PhotoMessage } from './messages.js';
 import { InputError, percent, previousDate, renderReports, stripReportTimestamps, updateLabel, type Snapshot } from './report.js';
 import { UNSPEC_SERVICE_AREAS } from './unspec-service-areas.js';
+import { outlineImageText } from './image-font.js';
 
 export interface BranchImageRow {
   label: string;
@@ -86,7 +87,7 @@ export function branchImageSvg(snapshot: Snapshot, previous: Snapshot | null, br
 
 export async function branchImage(snapshot: Snapshot, previous: Snapshot | null, branch: Branch, date: string, timestamp: number): Promise<PhotoMessage> {
   const { svg } = branchImageSvg(snapshot, previous, branch, date, timestamp);
-  const png = await sharp(Buffer.from(svg)).png().toBuffer();
+  const png = await sharp(Buffer.from(await outlineImageText(svg))).png().toBuffer();
   return { type: 'photo', photo: 'attach://photo', caption: `📊 REKAP UNSPEC ${branch}\n${date} · Branch → Service Area → STO`,
     upload: { filename: `UNSPEC-${branch}-${date}.png`, base64: png.toString('base64') } };
 }
@@ -94,7 +95,21 @@ export async function branchImage(snapshot: Snapshot, previous: Snapshot | null,
 export async function branchReportMessages(snapshot: Snapshot, previous: Snapshot | null, timestamp: number, date: string, scope: Branch | 'SEMUA', reports = renderReports(snapshot, previous, timestamp, date)): Promise<OutgoingMessage[]> {
   const messages: OutgoingMessage[] = [];
   for (const branch of scope === 'SEMUA' ? BRANCHES : [scope]) {
-    messages.push(stripReportTimestamps(reports[BRANCHES.indexOf(branch)]!), await branchImage(snapshot, previous, branch, date, timestamp));
+    const photo = await branchImage(snapshot, previous, branch, date, timestamp);
+    const full = stripReportTimestamps(reports[BRANCHES.indexOf(branch)]!);
+    // Retain the full report when it fits. Compact labels/spacing for the 1,024-unit photo limit.
+    const compact = full.replace('📊 SUMMARY PERFORMANSI UNSPEC – BRANCH', '📊 SUMMARY UNSPEC – BRANCH')
+      .replace('🎯 TARGET MAKSIMAL: 0,10%\n', '')
+      .replace('🚀 REALISASI BRANCH (H):', 'REALISASI (H):')
+      .replace('📈 GROWTH REALISASI (H vs H-1):', 'GROWTH (H vs H-1):')
+      .replace('🏆 STO TERENDAH / MENCAPAI TARGET', '🟢 STO MENCAPAI TARGET')
+      .replace('⚠️ STO PERLU ATENSI (Melebihi Batas Target)', '🔴 STO DI ATAS TARGET')
+      .replace(/^[🟢🔴] /gmu, '').replaceAll(' (Tertinggi)', ' ↑')
+      .replace('Ket: 🟢 = Mencapai target (≤ 0,10%) | 🔴 = Di atas target (> 0,10%)', 'Target ≤ 0,10% · ↑ tertinggi')
+      .replace(/\n\n/g, '\n');
+    photo.caption = full.length <= 1024 ? full : compact;
+    if (photo.caption.length > 1024) throw new InputError('Caption UNSPEC melebihi batas foto Telegram.');
+    messages.push(photo);
   }
   return messages;
 }

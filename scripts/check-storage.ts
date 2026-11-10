@@ -6,6 +6,7 @@ import { InputError, parseSnapshot } from '../src/report.js';
 import { Store } from '../src/store.js';
 import { readFile } from 'node:fs/promises';
 import { parseValinsWorkbook, renderValinsReports } from '../src/valins.js';
+import type { PhotoMessage } from '../src/messages.js';
 
 // Opt-in integration check against the configured database. Every write is rolled back.
 if (!process.env.DATABASE_URL) throw new Error('Isi DATABASE_URL terlebih dahulu.');
@@ -117,7 +118,7 @@ try {
     await store.prepareMenu(base - 21, chat, 'user-a', 0, { type: 'branch', kind: 'unspec', scope: 'BONE', date: '2026-10-27' });
     assert.deepEqual(await store.getPreference(chat, 'user-a'), { kind: 'unspec', scope: 'BONE', date: '2026-10-27' });
     const menuJob = await store.getJob(base - 21);
-    assert.match(String(menuJob?.messages[0]), /BRANCH BONE/);
+    assert.match((menuJob?.messages[0] as PhotoMessage).caption!, /BRANCH BONE/);
     const confirmation = menuJob?.messages.at(-1);
     assert.ok(confirmation && typeof confirmation !== 'string' && confirmation.type !== 'photo' && confirmation.reply_markup?.inline_keyboard.length);
     await store.prepareMenu(base - 22, chat, 'user-b', 0, { type: 'kind', kind: 'valins_dc' });
@@ -143,10 +144,10 @@ try {
     await store.prepareMenu(base - 31, flowChat, context.userId, 0, { type: 'kind', kind: 'unspec' });
     await store.prepareUpload(base - 32, flowChat, 2, stamp(27, 8), snapshot(3), '2026-10-27', 'SEMUA', context);
     await store.prepareMenu(base - 33, flowChat, context.userId, 0, { type: 'branch', kind: 'unspec', scope: 'PARE-PARE', date: '2026-10-27' });
-    assert.match(String((await store.getJob(base - 33))!.messages[0]), /SALDO \(H\): 3\nSALDO \(H-1\): 2\n/);
+    assert.match(((await store.getJob(base - 33))!.messages[0] as PhotoMessage).caption!, /SALDO \(H\): 3\nSALDO \(H-1\): 2\n/);
     await store.prepareUpload(base - 34, flowChat, 3, stamp(27, 10), snapshot(4), '2026-10-27', 'SEMUA', context);
     await store.prepareMenu(base - 35, flowChat, context.userId, 0, { type: 'branch', kind: 'unspec', scope: 'PARE-PARE', date: '2026-10-27' });
-    assert.match(String((await store.getJob(base - 35))!.messages[0]), /SALDO \(H\): 4\nSALDO \(H-1\): 2\n/);
+    assert.match(((await store.getJob(base - 35))!.messages[0] as PhotoMessage).caption!, /SALDO \(H\): 4\nSALDO \(H-1\): 2\n/);
     await store.prepareUpload(base - 36, flowChat, 4, stamp(28, 8), snapshot(5), '2026-10-28', 'SEMUA', context);
     await assert.rejects(store.prepareMenu(base - 37, flowChat, context.userId, 0, { type: 'branch', kind: 'unspec', scope: 'PARE-PARE', date: '2026-10-27' }), InputError);
     assert.match((await store.report(flowChat, '2026-10-28'))[3]!, /SALDO \(H\): 5\nSALDO \(H-1\): 4\n/);
@@ -157,20 +158,20 @@ try {
     const live = { date: '2026-10-27', fetchedAt: new Date(stamp(27, 9) * 1000).toISOString(), timestamp: stamp(27, 9), snapshot: snapshot(3), previous: snapshot(8) };
     await store.prepareLiveUnspec(base - 80, liveChat, 'api-user', 42, 'SEMUA', live);
     const liveJob = (await store.getJob(base - 80))!;
-    assert.equal(liveJob.messages.length, 9);
+    assert.equal(liveJob.messages.length, 5);
     assert.equal(liveJob.messages.filter(message => typeof message !== 'string' && message.type === 'photo').length, 4);
-    assert.match(String(liveJob.messages[6]), /SALDO \(H\): 3\nSALDO \(H-1\): 8\n/);
+    assert.match((liveJob.messages[3] as PhotoMessage).caption!, /SALDO \(H\): 3\nSALDO \(H-1\): 8\n/);
     assert.deepEqual(await store.getPreference(liveChat, 'api-user', 42), { kind: 'unspec', scope: 'SEMUA', date: '2026-10-27' });
     await store.prepareLiveUnspec(base - 80, liveChat, 'api-user', 42, 'SEMUA', { ...live, snapshot: snapshot(9) });
     assert.deepEqual((await store.getJob(base - 80))!.messages, liveJob.messages);
     await store.prepareLiveUnspec(base - 79, liveChat, 'api-user', 42, 'PARE-PARE', { ...live, snapshot: snapshot(5) });
-    assert.equal((await store.getJob(base - 79))!.messages.length, 3);
+    assert.equal((await store.getJob(base - 79))!.messages.length, 2);
     assert.match((await store.report(liveChat, '2026-10-27'))[3]!, /SALDO \(H\): 5\nSALDO \(H-1\): 8\n/);
-    assert.match(String((await store.getJob(base - 80))!.messages[6]), /SALDO \(H\): 3\n/);
+    assert.match(((await store.getJob(base - 80))!.messages[3] as PhotoMessage).caption!, /SALDO \(H\): 3\n/);
     const missingChat = `integration-check:${randomUUID()}`;
     await store.prepareUpload(base - 78, missingChat, 1, stamp(25, 8), snapshot(2), '2026-10-25');
     await store.prepareLiveUnspec(base - 77, missingChat, 'api-user', 0, 'BONE', { ...live, previous: null });
-    assert.match(String((await store.getJob(base - 77))!.messages[0]), /SALDO \(H-1\): Belum tersedia/);
+    assert.match(((await store.getJob(base - 77))!.messages[0] as PhotoMessage).caption!, /SALDO \(H-1\): Belum tersedia/);
     console.log('Uji cetak API lulus: tanpa CSV, H-1 dashboard, semua/selected branch, retry, dan source ordering.');
     const morningLive = { ...live, timestamp: stamp(27, 10), fetchedAt: new Date(stamp(27, 10) * 1000).toISOString(), morning: { snapshot: snapshot(7), capturedAt: '2026-10-27T00:01:00Z' } };
     await store.prepareLiveUnspec(base - 76, liveChat, 'api-user', 42, 'SEMUA', morningLive, 'table');

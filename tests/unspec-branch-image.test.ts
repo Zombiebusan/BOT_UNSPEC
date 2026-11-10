@@ -4,6 +4,8 @@ import sharp from 'sharp';
 import { BRANCHES, MASTER } from '../src/master.js';
 import { snapshotFromWorkzoneCounts, renderReports } from '../src/report.js';
 import { branchImage, branchImageSvg, branchReportMessages, buildBranchImageRows } from '../src/unspec-branch-image.js';
+import { outlineImageText } from '../src/image-font.js';
+import { Telegram } from '../src/telegram.js';
 
 const counts = Object.fromEntries(Object.keys(MASTER).map(code => [code, 1]));
 const current = snapshotFromWorkzoneCounts(counts, '2026-11-10');
@@ -60,17 +62,61 @@ test('each branch fits into one real PNG with header, final STO and all ten dash
   }
 });
 
-test('Cetak Semua interleaves four unchanged complete reports and four branch images from one snapshot', async () => {
+test('Cetak Semua returns exactly four photos, each with its real branch report in the caption', async () => {
   const messages = await branchReportMessages(current, previous, timestamp, '2026-11-10', 'SEMUA');
-  assert.equal(messages.length, 8);
+  assert.equal(messages.length, 4);
   const reports = renderReports(current, previous, timestamp, '2026-11-10');
   for (const [index, branch] of BRANCHES.entries()) {
-    assert.equal(messages[index * 2], reports[index]);
-    const photo = messages[index * 2 + 1]!;
+    const photo = messages[index]!;
     assert.ok(typeof photo !== 'string' && photo.type === 'photo');
     assert.ok(photo.upload?.filename.includes(branch));
-    assert.ok(photo.caption!.length < 1024);
+    assert.ok(photo.caption!.includes(`BRANCH ${branch}`));
+    assert.ok(photo.caption!.includes(`SALDO (H): ${current.branches[branch].saldo}`));
+    assert.ok(photo.caption!.length <= 1024);
+    if (reports[index]!.length <= 1024) assert.equal(photo.caption, reports[index]);
   }
   const selected = await branchReportMessages(current, previous, timestamp, '2026-11-10', 'KENDARI');
-  assert.equal(selected.length, 2);assert.equal(selected[0], reports[1]);
+  assert.equal(selected.length, 1);
+});
+
+test('bundled fonts turn every label and number into paths, including Greek delta, without OS fonts', async () => {
+  const { svg } = branchImageSvg(current, null, 'PARE-PARE', '2026-11-10', timestamp);
+  const outlined = await outlineImageText(svg);
+  assert.ok(!outlined.includes('<text'));
+  assert.ok(outlined.includes('aria-label="Δ SALDO"'));
+  assert.ok(outlined.includes('aria-label="SERVICE AREA LUWU UTARA"'));
+  assert.ok((outlined.match(/<path d=/g) ?? []).length > 500);
+  assert.equal((outlined.match(/aria-label=/g) ?? []).length, (svg.match(/<text /g) ?? []).length);
+  const metadata = await sharp(Buffer.from(outlined)).png().metadata();
+  assert.ok(metadata.width! > 1000);
+});
+
+test('large and tied values still fit one photo caption without dropping any STO', async () => {
+  const high = snapshotFromWorkzoneCounts(Object.fromEntries(Object.keys(MASTER).map(code => [code, 1000])), '2026-11-10');
+  const messages = await branchReportMessages(high, null, timestamp, '2026-11-10', 'SEMUA');
+  for (const [index, branch] of BRANCHES.entries()) {
+    const message = messages[index]!;
+    assert.ok(typeof message !== 'string' && message.type === 'photo');
+    assert.ok(message.caption!.length <= 1024);
+    for (const code of Object.keys(MASTER).filter(code => MASTER[code]!.branch === branch)) assert.ok(message.caption!.includes(code+':'), code);
+    assert.ok(message.caption!.includes('Belum tersedia'));
+  }
+});
+
+test('Telegram receives the PNG and actual report caption together in one sendPhoto request', async t => {
+  const messages = await branchReportMessages(current, previous, timestamp, '2026-11-10', 'BONE');
+  const photo = messages[0]!;
+  assert.ok(typeof photo !== 'string' && photo.type === 'photo');
+  const request = t.mock.method(globalThis, 'fetch', async (url: string, options: RequestInit) => {
+    assert.match(url, /\/sendPhoto$/);
+    assert.ok(options.body instanceof FormData);
+    assert.equal(options.body.get('caption'), photo.caption);
+    assert.ok(String(options.body.get('caption')).includes('SALDO (H): 10'));
+    const file = options.body.get('photo') as File;
+    assert.equal((await sharp(Buffer.from(await file.arrayBuffer())).metadata()).format, 'png');
+    assert.equal(options.body.get('message_thread_id'), '42');
+    return Response.json({ ok: true, result: {} });
+  });
+  await new Telegram('test-token').send('-123', photo, 42);
+  assert.equal(request.mock.callCount(), 1);
 });
