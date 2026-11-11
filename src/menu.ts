@@ -2,6 +2,7 @@ import { BRANCHES } from './master.js';
 import type { RichMessage } from './messages.js';
 import { InputError, previousDate, validDate } from './report.js';
 import type { ValinsKind, ValinsScope } from './valins.js';
+import { VISUAL_KEYS, VISUAL_LABELS, type VisualKey } from './unspec-visuals.js';
 
 export const REPORT_TYPES = ['unspec', 'valins_visit', 'valins_dc', 'valins_all'] as const;
 export type ReportType = (typeof REPORT_TYPES)[number];
@@ -11,6 +12,7 @@ export type MenuAction = { type: 'main' } | { type: 'kind'; kind: ReportType } |
   { type: 'upload'; kind: 'unspec' } | { type: 'live-menu'; kind: 'unspec' } |
   { type: 'live'; kind: 'unspec'; scope: ValinsScope } |
   { type: 'table'; kind: 'unspec'; date?: string } |
+  { type: 'visual-menu' } | { type: 'visual'; key: VisualKey | 'all' } |
   { type: 'branches'; kind: ReportType; date: string } |
   { type: 'branch' | 'print'; kind: ReportType; scope: ValinsScope; date?: string };
 
@@ -41,22 +43,32 @@ export function mainMenu(): RichMessage {
 export function liveUnspecMenu(): RichMessage {
   const button = (scope: ValinsScope, text = scope as string) => ({ text, callback_data: `live:unspec:${scope}` });
   return {
-    text: ['📊 UNSPEC — DATA API', '', 'Pilih branch, CETAK SEMUA, atau SULBAGSEL REPORT. Bot mengambil posisi terbaru tanpa upload CSV.', '🖼 Setiap Branch mendapat satu foto tabel lengkap SA/STO dengan caption laporan. CETAK SEMUA mengirim 4 foto ber-caption.', '🕗 Hari operasional berganti pukul 08.00 WITA; sebelum itu tetap hari operasional kemarin.', '📈 H-1 menggunakan snapshot hari operasional sebelumnya.', '', 'CSV tetap tersedia untuk arsip dan koreksi tanggal historis.'].join('\n'),
+    text: ['📊 UNSPEC — DATA API', '', 'Pilih branch, CETAK SEMUA, SULBAGSEL REPORT, atau Capture Dashboard. Bot mengambil posisi terbaru tanpa upload CSV.', '🖼 Setiap Branch mendapat satu foto tabel lengkap SA/STO dengan caption laporan. CETAK SEMUA mengirim 4 foto ber-caption.', '📸 Capture Dashboard menyediakan 7 grafik dan ringkasan terbaru dari API/histori.', '🕗 Hari operasional berganti pukul 08.00 WITA; sebelum itu tetap hari operasional kemarin.', '📈 H-1 menggunakan snapshot hari operasional sebelumnya.', '', 'CSV tetap tersedia untuk arsip dan koreksi tanggal historis.'].join('\n'),
     reply_markup: { inline_keyboard: [
       [button('PARE-PARE'), button('BONE')], [button('KENDARI'), button('MAKASSAR')],
       [button('SEMUA', '🖨 CETAK SEMUA')],
-      [{ text: '📊 SULBAGSEL REPORT', callback_data: 'table:unspec:live' }],
+       [{ text: '📊 SULBAGSEL REPORT', callback_data: 'table:unspec:live' }],
+       [{ text: '📸 Capture Dashboard', callback_data: 'visual:menu' }],
       [{ text: '📤 CSV / Arsip', callback_data: 'upload:unspec' }],
       [{ text: '🏠 Menu Utama', callback_data: 'menu:main' }]
     ] }
   };
+}
+export function visualUnspecMenu(): RichMessage {
+  return { text: '📸 CAPTURE DASHBOARD UNSPEC\n\nPilih satu gambar atau Cetak Semua Capture (7 foto). Setiap foto punya caption dan menggunakan data histori/API terbaru. Data yang belum tersedia tidak diisi dengan angka perkiraan.',
+    reply_markup: { inline_keyboard: [
+      ...VISUAL_KEYS.map((key, index) => [{ text: `${index + 1}. ${VISUAL_LABELS[key]}`, callback_data: `visual:${key}` }]),
+      [{ text: '📸 CETAK SEMUA CAPTURE (7)', callback_data: 'visual:all' }],
+      [{ text: '⬅️ Kembali ke UNSPEC', callback_data: 'menu:unspec' }],
+    ] } };
 }
 export function selectedLiveUnspecMenu(scope: ValinsScope, date: string, fetchedAt: string, hasPrevious: boolean): RichMessage {
   const time = new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Makassar', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(fetchedAt));
   return {
     text: [`✅ Pilihan: UNSPEC — ${scope === 'SEMUA' ? 'SEMUA BRANCH' : scope}`, `📅 Tanggal data: ${date}`, `🕒 Posisi API: ${time} WITA`, `📈 H-1: ${previousDate(date)} (${hasPrevious ? 'tersedia' : 'belum tersedia'})`, '', '🖼 Foto tabel beserta caption laporan sudah dicetak untuk setiap Branch.', 'Cetak Ulang mengambil posisi API terbaru.'].join('\n'),
     reply_markup: { inline_keyboard: [
-      [{ text: '🖨 Cetak Ulang', callback_data: `live:unspec:${scope}` }],
+       [{ text: '🖨 Cetak Ulang', callback_data: `live:unspec:${scope}` }],
+       [{ text: '📸 Capture Dashboard', callback_data: 'visual:menu' }],
       [{ text: '⬅️ Ganti Branch', callback_data: 'live:unspec:menu' }, { text: '📤 CSV / Arsip', callback_data: 'upload:unspec' }],
       [{ text: '🏠 Menu Utama', callback_data: 'menu:main' }]
     ] }
@@ -126,6 +138,9 @@ export function selectedMenu(kind: ReportType, scope: ValinsScope, date: string)
   };
 }
 export function parseMenuAction(data: string): MenuAction {
+  if (data === 'visual:menu') return { type: 'visual-menu' };
+  if (data === 'visual:all') return { type: 'visual', key: 'all' };
+  if (data.startsWith('visual:') && VISUAL_KEYS.includes(data.slice(7) as VisualKey)) return { type: 'visual', key: data.slice(7) as VisualKey };
   if (data === 'menu:main') return { type: 'main' };
   if (data === 'upload:unspec') return { type: 'upload', kind: 'unspec' };
   if (data === 'live:unspec:menu') return { type: 'live-menu', kind: 'unspec' };

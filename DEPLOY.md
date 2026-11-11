@@ -121,6 +121,8 @@ Versi menu tombol memerlukan tabel `report_preferences` dan update webhook **`ca
 
 ## Fitur laporan bergambar
 
+Fitur **📸 Capture Dashboard** di menu UNSPEC membutuhkan endpoint privat `/api/bot/visuals` di proyek dashboard. Deploy perubahan dashboard terlebih dahulu, lalu perubahan bot. Token `UNSPEC_BOT_API_TOKEN` dashboard dan `UNSPEC_API_TOKEN` bot harus tetap sama. Tombol "Cetak Semua Capture" mengirim tujuh foto bergrafik data API/histori, masing-masing dengan caption; foto dibekukan untuk retry. Tidak perlu mengubah schema database kedua proyek.
+
 UNSPEC **Cetak Semua** otomatis mengirim **4 foto tabel lengkap dengan caption laporan**, satu foto untuk setiap Branch. Caption menyatu dengan foto, bukan pesan terpisah. Gambar menggunakan snapshot yang sama dengan caption dan tersimpan dalam job retry. Deploy bot dengan `package.json`, `package-lock.json`, dan `vercel.json` terbaru agar `sharp`, `fontkit`, serta empat font Noto Sans regular/bold Latin/Greek ikut terpasang. Font dibundel sebagai WOFF lalu teks diubah menjadi path agar gambar terbaca meskipun Vercel tidak menyediakan font sistem. Tidak perlu mengubah endpoint API dashboard atau skema database untuk gambar Branch.
 
 Deploy source terbaru untuk mengaktifkan fitur **Reply/Balas laporan dengan foto**. Tidak ada environment variable atau migrasi database tambahan untuk fitur ini. Setelah bot mencetak laporan, balas pesan laporan tersebut dengan satu foto; bot mengirim ulang foto dengan caption teks laporan. Jika teks melebihi 1.024 karakter, foto dan laporan lengkap dikirim sebagai dua pesan yang dapat diteruskan bersama.

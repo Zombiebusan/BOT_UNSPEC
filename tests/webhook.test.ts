@@ -13,6 +13,7 @@ import { InputError, parseSnapshot, renderReports, witaDate } from '../src/repor
 import { unspecTableMessages } from '../src/unspec-table.js';
 import { branchReportMessages } from '../src/unspec-branch-image.js';
 import { selectedLiveUnspecMenu } from '../src/menu.js';
+import { VISUAL_KEYS } from '../src/unspec-visuals.js';
 import type { ValinsScope } from '../src/valins.js';
 
 test('webhook verifies the secret and accepts all users without an account allowlist', async t => {
@@ -287,6 +288,50 @@ test('UNSPEC live text/table print bypasses CSV and stale menu dates; retries re
     assert.equal(await run(601), 200);
     assert.equal(prepare.mock.callCount(), 3);
     assert.match(String(jobs.get(601)!.messages[0]), /API sementara gagal/);
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
+    Object.assign(process.env, original);
+  }
+});
+
+test('visual menu and seven capture callback freeze real API-derived photos; retry never refetches', async t => {
+  const original = { ...process.env };
+  Object.assign(process.env, { TELEGRAM_BOT_TOKEN: '777:test', TELEGRAM_WEBHOOK_SECRET: 'test_secret_12345678', DATABASE_URL: 'postgresql://not-connected', UNSPEC_API_URL: 'https://dashboard.test/api/bot/unspec', UNSPEC_API_TOKEN: 'visual-token' });
+  const now = Math.floor(Date.now() / 1000), date = witaDate(now);
+  const snapshot = parseSnapshot('INCIDENT,WORKZONE,SUMMARY,STATUS\nINC1,ANT,[UNSPEC],BACKEND', date);
+  const live = { date, fetchedAt: new Date(now * 1000).toISOString(), timestamp: now, snapshot, previous: null };
+  const customers = Object.fromEntries(Object.entries(snapshot.branches).flatMap(([, branch]) => Object.entries(branch.stoLis ?? {})));
+  const values = Object.fromEntries(Object.values(snapshot.branches).flatMap(branch => Object.entries(branch.stos)));
+  const history = { version: 1, requestId: '', date, fetchedAt: live.fetchedAt,
+    daily: { [date]: values }, monthly: { [date.slice(0, 7)]: { saldo: values, customers } }, customers,
+    imjas: { weight: 6, regionalReported: 100000000, branch: { BONE: 1000000, KENDARI: 1000000, MAKASSAR: 1000000, 'PARE-PARE': 1000000 } } };
+  const jobs = new Map<number, Job>();
+  t.mock.method(Store.prototype, 'getJob', async (id: number) => jobs.get(id) ?? null);
+  const saved = t.mock.method(Store.prototype, 'prepareMessages', async (id: number, chat: string, messages: OutgoingMessage[]) => {
+    jobs.set(id, { update_id: String(id), chat_id: chat, messages, delivered: messages.length });
+  });
+  const latest = t.mock.method(UnspecApi.prototype, 'latest', async () => live);
+  const visualFetch = t.mock.method(globalThis, 'fetch', async (url: string | URL) => Response.json({ ...history, requestId: new URL(url).searchParams.get('requestId') }));
+  t.mock.method(Telegram.prototype, 'answerCallback', async () => {});
+  const run = async (id: number, data: string) => {
+    let code = 0;
+    await handler({ method: 'POST', headers: { 'x-telegram-bot-api-secret-token': 'test_secret_12345678' }, body: {
+      update_id: id, callback_query: { id: `click-${id}`, from: { id: 456 }, data,
+        message: { message_id: 22, date: now, from: { id: 777, is_bot: true }, chat: { id: -100123 }, message_thread_id: 42 } },
+    } } as unknown as ApiRequest, { setHeader() {}, status(value: number) { code = value;return this; }, json() {} } as unknown as ApiResponse);
+    return code;
+  };
+  try {
+    assert.equal(await run(1001, 'visual:menu'), 200);
+    assert.equal(latest.mock.callCount(), 0);
+    assert.equal(await run(1002, 'visual:all'), 200);
+    assert.equal(await run(1002, 'visual:all'), 200);
+    assert.equal(latest.mock.callCount(), 1);assert.equal(visualFetch.mock.callCount(), 1);
+    assert.equal(saved.mock.callCount(), 2);
+    const photos = jobs.get(1002)!.messages;
+    assert.equal(photos.length, VISUAL_KEYS.length);
+    assert.ok(photos.every(photo => typeof photo !== 'string' && photo.type === 'photo' && photo.caption?.includes(date)));
+    assert.ok(photos.every(photo => typeof photo !== 'string' && photo.type === 'photo' && photo.upload?.base64));
   } finally {
     for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
     Object.assign(process.env, original);

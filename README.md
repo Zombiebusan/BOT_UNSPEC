@@ -47,6 +47,22 @@ Setelah deploy versi menu tombol, jalankan **`npm run webhook:set`** agar Telegr
 
 ## SULBAGSEL REPORT — tabel UNSPEC
 
+### Capture Dashboard (7 foto)
+
+Di menu **UNSPEC → 📸 Capture Dashboard**, pilih satu gambar atau **CETAK SEMUA CAPTURE** untuk mengirim tujuh foto berikut, masing-masing dengan caption pada foto yang sama:
+
+1. Tren Harian Pencapaian UNSPEC Regional Sulbagsel
+2. Tren Harian Pencapaian UNSPEC per Branch
+3. Performansi per Branch MTD
+4. Tren Pencapaian Bulanan Regional Sulbagsel
+5. Tren Pencapaian Bulanan per Branch
+6. IMJAS Realisasi dan Loss Regional/Branch
+7. Tren Kontribusi KPI UNSPEC terhadap IMJAS per Bulan
+
+Angka posisi terbaru berasal dari **snapshot API UNSPEC yang sama** untuk semua foto; tanggal-tanggal lain memakai snapshot historis di database dashboard dan baseline bulanan/IMJAS dashboard. Tidak ada titik grafik rekaan untuk tanggal tanpa snapshot. Foto dan caption dibekukan dalam job agar retry tidak mengganti angka yang sudah disiapkan. Gambar dibuat oleh bot dari agregat data terautentikasi, tanpa data pelanggan.
+
+**Deploy dashboard terlebih dahulu** agar endpoint bearer-token `/api/bot/visuals?requestId=...` tersedia, baru deploy bot. Endpoint hanya merespons request ID API bot yang sudah selesai, mengembalikan agregat tanpa identitas pelanggan. Kedua proyek menggunakan token API bot yang sudah dikonfigurasi; tidak perlu menambah environment variable atau migrasi database.
+
 Menu UNSPEC memiliki tombol **📊 SULBAGSEL REPORT** tepat di bawah **CETAK SEMUA**. Tombol mengirim satu pesan teks tabel monospace Telegram, dengan garis dan header SALDO bertingkat. Laporan teks lama tetap tersedia melalui pilihan Branch dan CETAK SEMUA.
 
 - Header: **BRANCH/SA**, **SALDO** (H, H-1, TARGET, GAP), **CLOSE HI**, **REAL**, **ACH**.

@@ -234,7 +234,7 @@ export class Store {
   }
 
   async prepareMenu(updateId: number, chatId: string, userId: string, threadId: number, action: MenuAction): Promise<void> {
-    if (action.type === 'live' || (action.type === 'table' && !action.date)) throw new InputError('Gunakan pemrosesan API untuk cetak UNSPEC terbaru.');
+    if (action.type === 'live' || action.type === 'visual' || action.type === 'visual-menu' || (action.type === 'table' && !action.date)) throw new InputError('Gunakan pemrosesan API untuk cetak UNSPEC terbaru.');
     await this.sql.begin(async tx => {
       await tx`SELECT pg_advisory_xact_lock(hashtextextended(${chatId}, 0))`;
       const existing = await tx`SELECT update_id FROM telegram_jobs WHERE update_id = ${updateId}`;

@@ -1,15 +1,16 @@
 import type { ApiRequest, ApiResponse } from '../src/http.js';
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { getConfig } from '../src/config.js';
 import { InputError, parseSnapshot, resolveCsvReportDate, resolveReportDate, validDate } from '../src/report.js';
 import { database, Store } from '../src/store.js';
 import { Telegram, TelegramError, type TelegramUpdate } from '../src/telegram.js';
 import { parseValinsArguments, parseValinsWorkbook } from '../src/valins.js';
-import { mainMenu, parseMenuAction, valinsKind, type MenuAction } from '../src/menu.js';
+import { mainMenu, parseMenuAction, valinsKind, visualUnspecMenu, type MenuAction } from '../src/menu.js';
 import type { OutgoingMessage } from '../src/messages.js';
 import { prepareReportPhoto } from '../src/report-photo.js';
 import { UnspecApi, UnspecPendingError } from '../src/unspec-api.js';
 import { parseBotCommand, reportDocumentKind } from '../src/message-policy.js';
+import { fetchVisualHistory, renderVisualPhotos, VISUAL_KEYS, visualRequestId } from '../src/unspec-visuals.js';
 
 const HELP = [
   '📖 PANDUAN SINGKAT', '',
@@ -17,6 +18,7 @@ const HELP = [
   '1. Ketik /start atau /menu.',
    '2. UNSPEC: pilih branch, Cetak Semua, atau SULBAGSEL REPORT; data terbaru diambil dari API.',
    '   Cetak Branch: satu foto tabel SA/STO dengan caption laporan. Cetak Semua: 4 foto ber-caption.',
+   '   Capture Dashboard: 7 gambar tren/performansi/IMJAS dengan caption dari data API dan histori.',
    '3. VALINS: pilih jenis VALINS, upload Excel sebagai dokumen, lalu pilih branch atau Cetak Semua.',
    '4. Upload CSV: pilih CSV / Arsip. Untuk file berikutnya, tekan Upload File Baru.',
    'Bot menunggu satu file yang sesuai selama 15 menit, dari pengguna dan chat/topic yang sama.', '',
@@ -106,7 +108,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     if (commandInput?.target && commandInput.target !== await telegram.getUsername()) { res.status(200).json({ ok: true });return; }
     const store = new Store(database(config.databaseUrl));
     if (callback) {
-      const fetching = callback.data === 'table:unspec:live' || /^live:unspec:(BONE|KENDARI|MAKASSAR|PARE-PARE|SEMUA)$/.test(callback.data || '');
+       const fetching = callback.data === 'table:unspec:live' || callbackAction?.type === 'visual' || /^live:unspec:(BONE|KENDARI|MAKASSAR|PARE-PARE|SEMUA)$/.test(callback.data || '');
       await telegram.answerCallback(callback.id, fetching ? 'Mengambil data UNSPEC. Laporan akan dikirim otomatis setelah data siap.' : undefined);
     }
     let job = await store.getJob(update.update_id);
@@ -120,11 +122,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
       try {
         if (callback) {
           const action = callbackAction!;
-          if (action.type === 'live' || (action.type === 'table' && !action.date)) {
-            const namespace = createHash('sha256').update(config.token.split(':')[0]!).digest('hex').slice(0, 12);
-            const requestId = `tg-${namespace}-${update.update_id}`;
+          if (action.type === 'visual-menu') await store.prepareMessages(update.update_id, chatId, [visualUnspecMenu()]);
+          else if (action.type === 'live' || action.type === 'visual' || (action.type === 'table' && !action.date)) {
+            const requestId = visualRequestId(config.token, update.update_id);
             const live = await new UnspecApi(config).latest(Math.max(1000, Math.min(42000, 45000 - (Date.now() - started))), requestId);
-            if (action.type === 'table') await store.prepareLiveUnspec(update.update_id, chatId, userId, threadId, 'SEMUA', live, 'table');
+            if (action.type === 'visual') {
+              const history = await fetchVisualHistory(config, live, requestId);
+              await store.prepareMessages(update.update_id, chatId, await renderVisualPhotos(history, live, action.key === 'all' ? VISUAL_KEYS : [action.key]));
+            } else if (action.type === 'table') await store.prepareLiveUnspec(update.update_id, chatId, userId, threadId, 'SEMUA', live, 'table');
             else await store.prepareLiveUnspec(update.update_id, chatId, userId, threadId, action.scope, live);
           } else await store.prepareMenu(update.update_id, chatId, userId, threadId, action);
         } else if (message.photo?.length) {
